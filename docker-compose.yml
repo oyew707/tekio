@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: tekio
+      POSTGRES_USER: tekio
+      POSTGRES_PASSWORD: tekio
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  app:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - rabbitmq
+    command: >
+      sh -c "pip install -e . && streamlit run app/ui/streamlit_app.py --server.address=0.0.0.0 --server.port=8501"
+    ports:
+      - "8501:8501"
+
+volumes:
+  pgdata:
