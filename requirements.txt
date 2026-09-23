@@ -1,0 +1,10 @@
+langchain>=1.4.2
+langchain-openai>=1.6.3
+langchain-mcp>=0.2.1
+langchain_mcp_adapters>=0.3.2
+langgraph>=1.2.12
+playwright>=1.63.0
+pgvector>=0.5.0
+psycopg2-binary>=2.9.13
+pika>=1.4.4
+python-dotenv>=0.1.0
