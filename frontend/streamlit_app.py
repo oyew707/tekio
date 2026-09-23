@@ -13,10 +13,10 @@ import os
 import threading
 import streamlit as st
 import asyncio
-from ..agent.graph import build_graph, AVAILABLE_AGENTIC_MODELS
+from agent.graph import build_graph, AVAILABLE_AGENTIC_MODELS
 from playwright.async_api import async_playwright
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
-from ..workers.queue_publisher import TrajectoryQueuePublisher
+from workers.queue_publisher import TrajectoryQueuePublisher
 
 # Constants
 load_dotenv()
@@ -43,10 +43,11 @@ STREAMLIT_STYLE = """
 """
 DEFAULT_STATE = {
     "history": StreamlitChatMessageHistory(key="chat_history"),
-    "max_token": 8192,
+    "max_tokens": 8192,
     "last_error": None,
     "model": "browser-use-9b",
     "system_prompt": "",  # Additional Prompts
+    "frame": None,
     "chat_disabled": False,
     "watching": False,
 }
@@ -140,7 +141,7 @@ def main():
     -------------------------------------------------------
     """
     # Agent
-    agent = build_graph()
+    agent = asyncio.run(build_graph())
 
     # App
     st.set_page_config(layout="wide", page_title="tekio browser-use", page_icon="☸")
@@ -205,7 +206,7 @@ def main():
 
         # Simple chat input with disabled state
         if prompt := st.chat_input(
-            "Ask Claude to browse the web...",
+            "Ask Tekio to browse the web...",
             disabled=st.session_state.get("chat_disabled", False),
         ):
             # Display user message and add to history
@@ -227,10 +228,7 @@ def main():
                 response_text = final_state.get("router_decision").message
                 st.chat_message("assistant").write(response_text)
                 st.session_state.history.add_ai_message(response_text)
-                if (
-                    QUEUE_ENDPOINT
-                    and final_state.get("trace_id") is not None
-                ):
+                if QUEUE_ENDPOINT and final_state.get("trace_id") is not None:
                     TrajectoryQueuePublisher().publish(
                         trace_id=final_state.get("trace_id"),
                         task=prompt,

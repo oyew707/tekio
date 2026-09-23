@@ -6,6 +6,7 @@ Author:  Einstein O
 Email:   eo2233@nyu.edu
 -------------------------------------------------------
 """
+
 # Imports
 
 # Constants
@@ -47,5 +48,3 @@ You must respond with a structured JSON object matching the RouterOutput schema.
 User Input: {user_input}
 Last Message: {prev_message}
 """
-
-

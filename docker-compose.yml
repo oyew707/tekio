@@ -33,6 +33,9 @@ services:
     restart: unless-stopped
     depends_on:
       - chromium
+    environment:
+      - ALLOWED_HOSTS=playwright-mcp,localhost,*
+      - ALLOWED_ORIGINS=*
     entrypoint: ["node", "/app/cli.js"]
     command:
       - --cdp-endpoint=http://chromium:9222
@@ -52,7 +55,7 @@ services:
       - postgres
       - rabbitmq
     command: >
-      sh -c "pip install -e . && streamlit run app/ui/streamlit_app.py --server.address=0.0.0.0 --server.port=8501"
+      sh -c "pip install -r requirements.txt && PYTHONPATH=. streamlit run frontend/streamlit_app.py --server.address=0.0.0.0 --server.port=8501"
     ports:
       - "8501:8501"
 

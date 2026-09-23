@@ -17,16 +17,20 @@ from .node import agent_node, router_node
 
 # Constants
 MAX_STEPS = 20
-client = MultiServerMCPClient({
-    "playwright": {
-        "url": "http://playwright-mcp:8931/",   
-        "transport": "sse",                   
+client = MultiServerMCPClient(
+    {
+        "playwright": {
+            "url": "http://playwright-mcp:8931/sse",
+            "transport": "sse",
+            "headers": {"Host": "localhost:8931"},
+        }
     }
-})
+)
 AVAILABLE_AGENTIC_MODELS = [
     "browser-use-9b",
     "gemma4-12b-agentic",
 ]
+
 
 def should_continue(state: AgentState) -> str:
     """
@@ -44,10 +48,14 @@ def should_continue(state: AgentState) -> str:
     if state["iterations"] > MAX_STEPS:
         return "end"
 
-    if state.get("router_decision") is None or state["router_decision"].status == 'CONTINUE':
-        return 'continue'
+    if (
+        state.get("router_decision") is None
+        or state["router_decision"].status == "CONTINUE"
+    ):
+        return "continue"
 
     return "end"
+
 
 async def build_graph():
     """
@@ -58,7 +66,7 @@ async def build_graph():
        app - The compiled LangGraph application (CompiledStateGraph)
     -------------------------------------------------------
     """
-    playwright_browser_tools = await client.get_tools() 
+    playwright_browser_tools = await client.get_tools()
 
     workflow = StateGraph(AgentState)
 
@@ -70,7 +78,7 @@ async def build_graph():
 
     # Set the entry point
     workflow.set_entry_point("agent")
-    
+
     # Add edges
     workflow.add_edge("agent", "router")
     workflow.add_edge("tools", "agent")
@@ -78,12 +86,7 @@ async def build_graph():
     # Conditional edge after agent
     workflow.add_conditional_edges("agent", tools_condition)
     workflow.add_conditional_edges(
-        "router",
-        should_continue,
-        {
-            "continue": "agent",
-            "end": END
-        }
+        "router", should_continue, {"continue": "agent", "end": END}
     )
 
     return workflow.compile()

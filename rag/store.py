@@ -15,21 +15,23 @@ from langchain_openai import OpenAIEmbeddings
 
 # Constants
 
+
 class TipStore:
     """
     -------------------------------------------------------
-    A vector store implementation to manage and retrieve 
+    A vector store implementation to manage and retrieve
     self-improvement tips.
     -------------------------------------------------------
     """
+
     def __init__(self, dsn: str | None = None) -> None:
         """
         -------------------------------------------------------
-        Initializes the TipStore with database credentials and 
+        Initializes the TipStore with database credentials and
         embedding model configuration.
         -------------------------------------------------------
         Parameters:
-            dsn - PostgreSQL connection string defaults to PGVECTOR_URL 
+            dsn - PostgreSQL connection string defaults to PGVECTOR_URL
                 env variable (str)
         -------------------------------------------------------
         """
@@ -51,10 +53,15 @@ class TipStore:
         """
         return psycopg.connect(self.dsn)
 
-    def embed_and_upsert(self, content: str, metadata: dict[str, Any] | None = None, trace_id: str | List[str] | None = None) -> None:
+    def embed_and_upsert(
+        self,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+        trace_id: str | List[str] | None = None,
+    ) -> None:
         """
         -------------------------------------------------------
-        Generates an embedding for the provided text and stores 
+        Generates an embedding for the provided text and stores
         it in the database.
         -------------------------------------------------------
         Parameters:
@@ -62,7 +69,7 @@ class TipStore:
             metadata: metadata to store alongside the content. (dict[str, Any] | None)
             trace_ids: identifier used for tracking the origin of the tip (str | List(str))
         -------------------------------------------------------
-        """     
+        """
         metadata = metadata or {}
         embedding = self.embeddings.embed_query(content)
 
@@ -73,23 +80,28 @@ class TipStore:
                     INSERT INTO tips (embedding, content, metadata, trace_id)
                     VALUES (%s, %s, %s::jsonb, %s)
                     """,
-                    (embedding, content, psycopg.types.json.Jsonb(metadata), str(trace_id)),
+                    (
+                        embedding,
+                        content,
+                        psycopg.types.json.Jsonb(metadata),
+                        str(trace_id),
+                    ),
                 )
 
     def query(self, text: str, k: int = 3) -> list[dict[str, Any]]:
         """
         -------------------------------------------------------
-        Performs a vector similarity search to find the most 
+        Performs a vector similarity search to find the most
         relevant tips for a given query.
         -------------------------------------------------------
         Parameters:
             text: The input query text to search against (str)
             k: The number of top results to retrieve. Defaults to 3 (int)
         Returns:
-            list[dict[str, Any]]: A list of dictionaries containing 
+            list[dict[str, Any]]: A list of dictionaries containing
                 retrieved tip details (id, content, metadata, trace_id, created_at).
         -------------------------------------------------------
-        """ 
+        """
         embedding = self.embeddings.embed_query(text)
 
         with self._conn() as conn:

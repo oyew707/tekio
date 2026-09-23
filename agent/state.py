@@ -8,7 +8,7 @@ Email:   eo2233@nyu.edu
 """
 
 # Imports
-from typing import Dict, TypedDict, Annotated, Optional, List
+from typing import Dict, Annotated
 from langgraph.graph import MessagesState
 import operator
 
@@ -29,9 +29,9 @@ class AgentState(MessagesState):
        messages - Historical messages (List)
     -------------------------------------------------------
     """
+
     user_input: str
     iterations: Annotated[int, operator.add]
     router_decision: Dict
     model: str
     trace_id: str
-    
