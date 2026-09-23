@@ -12,9 +12,10 @@ import os
 from typing import Any, List
 import psycopg
 from langchain_openai import OpenAIEmbeddings
+from utils.logger import get_logger
 
 # Constants
-
+logger = get_logger(__name__, "info")
 
 class TipStore:
     """
@@ -35,7 +36,9 @@ class TipStore:
                 env variable (str)
         -------------------------------------------------------
         """
+        self.logger = logger.getChild(__name__)
         self.dsn = dsn or os.environ["PGVECTOR_URL"]
+        self.logger.debug(f"Initializing TipStore with dsn: {self.dsn}")
         self.embeddings = OpenAIEmbeddings(
             base_url=os.environ["API_BASE_URL"],
             api_key=os.environ["API_KEY"],
@@ -51,7 +54,14 @@ class TipStore:
             psycopg.Connection: A connection object to the database.
         -------------------------------------------------------
         """
-        return psycopg.connect(self.dsn)
+        self.logger.debug("Attempting database connection")
+        try:
+            conn = psycopg.connect(self.dsn)
+            self.logger.info("Database connection established")
+            return conn
+        except Exception as e:
+            self.logger.error(f"Failed to connect to database: {e}")
+            raise
 
     def embed_and_upsert(
         self,
@@ -70,8 +80,10 @@ class TipStore:
             trace_ids: identifier used for tracking the origin of the tip (str | List(str))
         -------------------------------------------------------
         """
+        self.logger.info(f"Upserting tip for content: {content[:50]}...")
         metadata = metadata or {}
         embedding = self.embeddings.embed_query(content)
+        self.logger.debug("Embedding generated successfully")
 
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -87,6 +99,7 @@ class TipStore:
                         str(trace_id),
                     ),
                 )
+                self.logger.info(f"Upsert successful for trace_id: {trace_id}")
 
     def query(self, text: str, k: int = 3) -> list[dict[str, Any]]:
         """
@@ -102,7 +115,9 @@ class TipStore:
                 retrieved tip details (id, content, metadata, trace_id, created_at).
         -------------------------------------------------------
         """
+        self.logger.info(f"Querying tips with k={k} for text: {text[:50]}...")
         embedding = self.embeddings.embed_query(text)
+        self.logger.debug("Query embedding generated")
 
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -116,7 +131,12 @@ class TipStore:
                     (embedding, k),
                 )
                 rows = cur.fetchall()
-
+        
+        if not rows:
+            self.logger.warning(f"No results found for query: {text}")
+        else:
+            self.logger.info(f"Query returned {len(rows)} results")
+            
         return [
             {
                 "id": row[0],

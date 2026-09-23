@@ -14,8 +14,10 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from .state import AgentState
 from .node import agent_node, router_node
+from utils.logger import get_logger
 
 # Constants
+logger = get_logger(__name__, "info")
 MAX_STEPS = 20
 client = MultiServerMCPClient(
     {
@@ -44,16 +46,25 @@ def should_continue(state: AgentState) -> str:
        next_node - The string name of the next node or END (str)
     -------------------------------------------------------
     """
-    # Stop after 3 iterations to prevent infinite loops
-    if state["iterations"] > MAX_STEPS:
+    iterations = state["iterations"]
+    logger.debug(f"should_continue check - iterations: {iterations}")
+
+    if iterations > MAX_STEPS:
+        logger.warning(f"Stopping at max iterations ({MAX_STEPS})")
         return "end"
 
-    if (
-        state.get("router_decision") is None
-        or state["router_decision"].status == "CONTINUE"
-    ):
+    router_decision = state.get("router_decision")
+    if router_decision is None:
+        logger.debug("No router decision yet, continuing")
         return "continue"
 
+    status = router_decision.status
+    logger.debug(f"Router decision status: {status}")
+
+    if status == "CONTINUE":
+        return "continue"
+
+    logger.info("Router decided to end the loop")
     return "end"
 
 
@@ -66,18 +77,23 @@ async def build_graph():
        app - The compiled LangGraph application (CompiledStateGraph)
     -------------------------------------------------------
     """
+    logger.info("Fetching Playwright tools from MCP client")
     playwright_browser_tools = await client.get_tools()
+    logger.debug(f"Loaded {len(playwright_browser_tools)} tools")
 
     workflow = StateGraph(AgentState)
+    logger.debug("Initializing StateGraph with AgentState")
 
     # Add the nodes
     agent_node_with_tools = partial(agent_node, tools=playwright_browser_tools)
     workflow.add_node("agent", agent_node_with_tools)
     workflow.add_node("tools", ToolNode(playwright_browser_tools))
     workflow.add_node("router", router_node)
+    logger.info(f"Added all nodes")
 
     # Set the entry point
     workflow.set_entry_point("agent")
+    logger.info("Set entry point to 'agent'")
 
     # Add edges
     workflow.add_edge("agent", "router")
@@ -88,5 +104,6 @@ async def build_graph():
     workflow.add_conditional_edges(
         "router", should_continue, {"continue": "agent", "end": END}
     )
+    logger.info("Graph edges and conditional edges configured")
 
     return workflow.compile()

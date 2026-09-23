@@ -17,9 +17,11 @@ from agent.graph import build_graph, AVAILABLE_AGENTIC_MODELS
 from playwright.async_api import async_playwright
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from workers.queue_publisher import TrajectoryQueuePublisher
+from utils.logger import get_logger
 
 # Constants
 load_dotenv()
+logger = get_logger(__name__, "info")
 SCREENSHOT_PLACEHOLDER = os.path.join(os.getcwd(), "frontend/dino_game.webp")
 CDP_ENDPOINT = os.getenv("CDP_ENDPOINT", "http://localhost:9222")
 QUEUE_ENDPOINT = os.getenv("RABBITMQ_URL")
@@ -52,18 +54,13 @@ DEFAULT_STATE = {
     "watching": False,
 }
 
-
-class Sender:
-    USER = "user"
-    BOT = "assistant"
-
-
 def setup_state():
     """
     -------------------------------------------------------
     Initialize/reload session state varaibles
     -------------------------------------------------------
     """
+    logger.info("Initializing session state")
     for k, v in DEFAULT_STATE.items():
         st.session_state[k] = v
 
@@ -82,7 +79,9 @@ async def _find_agent_page(browser):
     for context in browser.contexts:
         for page in context.pages:
             if page.url not in ("about:blank", ""):
+                logger.debug(f"Found non-blank page: {page.url}")
                 return page
+    logger.warning("No active non-blank page found; falling back to default page")
     context = browser.contexts[0] if browser.contexts else await browser.new_context()
     return context.pages[0] if context.pages else await context.new_page()
 
@@ -96,21 +95,27 @@ async def _watch_loop():
     whatever the agent itself is doing via the MCP server.
     -------------------------------------------------------
     """
+    logger.info(f"Starting CDP watch loop on {CDP_ENDPOINT}")
     try:
         async with async_playwright() as p:
             browser = await p.chromium.connect_over_cdp(CDP_ENDPOINT)
             st.session_state.watching = True
+            logger.debug("Browser connected via CDP")
             while st.session_state.watching:
                 try:
                     page = await _find_agent_page(browser)
                     st.session_state.frame = await page.screenshot(
                         type="jpeg", quality=60
                     )
+                    logger.debug("Captured browser frame")
                     await asyncio.sleep(0.1)
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Error during screenshot iteration: {e}")
                     break
             await browser.close()
+            logger.debug("Browser closed")
     finally:
+        logger.info("Stopping CDP watch loop")
         st.session_state.watching = False
 
 
@@ -121,6 +126,7 @@ def start_watching():
     -------------------------------------------------------
     """
     if st.session_state.watching:
+        logger.warning("Start watching called while already watching")
         return
     threading.Thread(target=lambda: asyncio.run(_watch_loop()), daemon=True).start()
 
@@ -131,6 +137,7 @@ def stop_watching():
     Stops the watch loop
     -------------------------------------------------------
     """
+    logger.info("Stopping background watcher")
     st.session_state.watching = False
 
 
@@ -141,6 +148,7 @@ def main():
     -------------------------------------------------------
     """
     # Agent
+    logger.info("Building agent graph")
     agent = asyncio.run(build_graph())
 
     # App
@@ -209,6 +217,7 @@ def main():
             "Ask Tekio to browse the web...",
             disabled=st.session_state.get("chat_disabled", False),
         ):
+            logger.info(f"Received user prompt: {prompt}")
             # Display user message and add to history
             st.chat_message("user").write(prompt)
             st.session_state.history.add_user_message(prompt)
@@ -224,17 +233,22 @@ def main():
                     "router_decision": None,
                     "model": st.session_state.model,
                 }
+                logger.debug(f"Running agent stream with model: {st.session_state.model}")
                 final_state = asyncio.run(agent.stream(agent_state))
                 response_text = final_state.get("router_decision").message
+                logger.info(f"Agent router decision: {response_text}")
                 st.chat_message("assistant").write(response_text)
                 st.session_state.history.add_ai_message(response_text)
                 if QUEUE_ENDPOINT and final_state.get("trace_id") is not None:
+                    logger.debug(f"Publishing trajectory for trace_id: {final_state.get('trace_id')}")
                     TrajectoryQueuePublisher().publish(
                         trace_id=final_state.get("trace_id"),
                         task=prompt,
                         status="completed",
                     )
+                    logger.info("Successfully published trajectory")
             except Exception as e:
+                logger.error(f"Error during agent execution: {e}", exc_info=True)
                 st.error(f"An error occurred: {e}")
             finally:
                 st.session_state.chat_disabled = False
