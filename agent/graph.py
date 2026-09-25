@@ -12,6 +12,7 @@ from functools import partial
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from .tools import BrowserTools
 from .state import AgentState
 from .node import agent_node, router_node
 from utils.logger import get_logger
@@ -79,15 +80,19 @@ async def build_graph():
     """
     logger.info("Fetching Playwright tools from MCP client")
     playwright_browser_tools = await client.get_tools()
-    logger.debug(f"Loaded {len(playwright_browser_tools)} tools")
+    bb = BrowserTools(playwright_tools=playwright_browser_tools)
+    cu_mapped_tools = bb.get_tools()
+    logger.debug(f"Loaded {len(cu_mapped_tools)} tools")
 
     workflow = StateGraph(AgentState)
     logger.debug("Initializing StateGraph with AgentState")
 
     # Add the nodes
-    agent_node_with_tools = partial(agent_node, tools=playwright_browser_tools)
+    agent_node_with_tools = partial(
+        agent_node, tools=cu_mapped_tools, playright_tools=playwright_browser_tools
+    )
     workflow.add_node("agent", agent_node_with_tools)
-    workflow.add_node("tools", ToolNode(playwright_browser_tools))
+    workflow.add_node("tools", ToolNode(cu_mapped_tools))
     workflow.add_node("router", router_node)
     logger.info(f"Added all nodes")
 
@@ -96,11 +101,12 @@ async def build_graph():
     logger.info("Set entry point to 'agent'")
 
     # Add edges
-    workflow.add_edge("agent", "router")
-    workflow.add_edge("tools", "agent")
+    workflow.add_edge("tools", "router")
 
     # Conditional edge after agent
-    workflow.add_conditional_edges("agent", tools_condition)
+    workflow.add_conditional_edges(
+        "agent", tools_condition, {"tools": "tools", "__end__": "router"}
+    )
     workflow.add_conditional_edges(
         "router", should_continue, {"continue": "agent", "end": END}
     )

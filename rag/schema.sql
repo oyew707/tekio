@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS tips (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    embedding vector(1536) NOT NULL,
+    embedding vector(768) NOT NULL,
     content TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     trace_id TEXT,

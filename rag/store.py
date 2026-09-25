@@ -15,7 +15,8 @@ from langchain_openai import OpenAIEmbeddings
 from utils.logger import get_logger
 
 # Constants
-logger = get_logger(__name__, "info")
+logger = get_logger(__name__, "debug")
+
 
 class TipStore:
     """
@@ -117,7 +118,7 @@ class TipStore:
         """
         self.logger.info(f"Querying tips with k={k} for text: {text[:50]}...")
         embedding = self.embeddings.embed_query(text)
-        self.logger.debug("Query embedding generated")
+        self.logger.debug(f"Query embedding generated {len(embedding)}")
 
         with self._conn() as conn:
             with conn.cursor() as cur:
@@ -125,18 +126,18 @@ class TipStore:
                     """
                     SELECT id::text, content, metadata, trace_id, created_at
                     FROM tips
-                    ORDER BY embedding <=> %s
+                    ORDER BY embedding <=> %s::vector
                     LIMIT %s
                     """,
                     (embedding, k),
                 )
                 rows = cur.fetchall()
-        
+
         if not rows:
             self.logger.warning(f"No results found for query: {text}")
         else:
             self.logger.info(f"Query returned {len(rows)} results")
-            
+
         return [
             {
                 "id": row[0],

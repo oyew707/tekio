@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import os
 import threading
 import streamlit as st
+from streamlit.runtime.scriptrunner_utils.script_run_context import add_script_run_ctx
 import asyncio
 from agent.graph import build_graph, AVAILABLE_AGENTIC_MODELS
 from playwright.async_api import async_playwright
@@ -54,6 +55,7 @@ DEFAULT_STATE = {
     "watching": False,
 }
 
+
 def setup_state():
     """
     -------------------------------------------------------
@@ -62,7 +64,8 @@ def setup_state():
     """
     logger.info("Initializing session state")
     for k, v in DEFAULT_STATE.items():
-        st.session_state[k] = v
+        if k not in st.session_state:
+            st.session_state[k] = v
 
 
 async def _find_agent_page(browser):
@@ -81,7 +84,7 @@ async def _find_agent_page(browser):
             if page.url not in ("about:blank", ""):
                 logger.debug(f"Found non-blank page: {page.url}")
                 return page
-    logger.warning("No active non-blank page found; falling back to default page")
+    logger.debug("No active non-blank page found; falling back to default page")
     context = browser.contexts[0] if browser.contexts else await browser.new_context()
     return context.pages[0] if context.pages else await context.new_page()
 
@@ -128,7 +131,13 @@ def start_watching():
     if st.session_state.watching:
         logger.warning("Start watching called while already watching")
         return
-    threading.Thread(target=lambda: asyncio.run(_watch_loop()), daemon=True).start()
+
+    def thread_wrapper():
+        asyncio.run(_watch_loop())
+
+    thread = threading.Thread(target=thread_wrapper, daemon=True)
+    add_script_run_ctx(thread)
+    thread.start()
 
 
 def stop_watching():
@@ -165,7 +174,6 @@ def main():
             "Max Output Tokens",
             min_value=1024,
             max_value=32768,
-            value=st.session_state.max_tokens,
             step=1024,
             key="max_tokens",
         )
@@ -187,12 +195,10 @@ def main():
         if c1.button(
             "Start watching",
             disabled=st.session_state.watching,
-            use_container_width=True,
+            width="stretch",
         ):
             start_watching()
-        if c2.button(
-            "Stop", disabled=not st.session_state.watching, use_container_width=True
-        ):
+        if c2.button("Stop", disabled=not st.session_state.watching, width="stretch"):
             stop_watching()
 
         if st.session_state.watching:
@@ -233,14 +239,18 @@ def main():
                     "router_decision": None,
                     "model": st.session_state.model,
                 }
-                logger.debug(f"Running agent stream with model: {st.session_state.model}")
-                final_state = asyncio.run(agent.stream(agent_state))
+                logger.debug(
+                    f"Running agent stream with model: {st.session_state.model}"
+                )
+                final_state = asyncio.run(agent.ainvoke(agent_state))
                 response_text = final_state.get("router_decision").message
                 logger.info(f"Agent router decision: {response_text}")
                 st.chat_message("assistant").write(response_text)
                 st.session_state.history.add_ai_message(response_text)
                 if QUEUE_ENDPOINT and final_state.get("trace_id") is not None:
-                    logger.debug(f"Publishing trajectory for trace_id: {final_state.get('trace_id')}")
+                    logger.debug(
+                        f"Publishing trajectory for trace_id: {final_state.get('trace_id')}"
+                    )
                     TrajectoryQueuePublisher().publish(
                         trace_id=final_state.get("trace_id"),
                         task=prompt,
@@ -260,7 +270,7 @@ def main():
         @st.fragment(run_every=0.15)
         def live_view():
             if st.session_state.frame:
-                st.image(st.session_state.frame, use_container_width=True)
+                st.image(st.session_state.frame, width="stretch")
             elif st.session_state.watching:
                 st.write("Connecting...")
             else:
