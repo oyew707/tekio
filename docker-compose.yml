@@ -28,6 +28,8 @@ services:
     container_name: chromium
     shm_size: '1gb'
     restart: unless-stopped
+    command:
+      - --window-size=1280,720
     networks:
       default:
         ipv4_address: 172.28.0.10
@@ -52,6 +54,7 @@ services:
       - --cdp-endpoint=http://172.28.0.10:9222
       - --port=8931
       - --host=0.0.0.0
+      - --viewport-size=${VIEWPORT_SIZE}
     ports:
       - "8931:8931"
 

@@ -16,6 +16,7 @@ from streamlit.runtime.scriptrunner_utils.script_run_context import add_script_r
 import asyncio
 from agent.graph import build_graph, AVAILABLE_AGENTIC_MODELS
 from playwright.async_api import async_playwright
+from langchain.mcp import MCPAdapter
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from workers.queue_publisher import TrajectoryQueuePublisher
 from utils.logger import get_logger
@@ -53,6 +54,13 @@ DEFAULT_STATE = {
     "frame": None,
     "chat_disabled": False,
     "watching": False,
+}
+CONFIG = {
+    "mcpServers": {
+        "playwright": {
+            "url": "http://playwright-mcp:8931/mcp",
+        }
+    }
 }
 
 
@@ -156,9 +164,16 @@ def main():
     Main Entrypoint
     -------------------------------------------------------
     """
-    # Agent
-    logger.info("Building agent graph")
-    agent = asyncio.run(build_graph())
+
+    async def run(agent_state):
+        async with MCPAdapter(CONFIG) as adapter:
+            # Agent
+            logger.info("Building agent graph")
+            agent = await build_graph(adapter=adapter)
+
+            logger.debug(f"Running agent stream with model: {st.session_state.model}")
+            final_state = await agent.ainvoke(agent_state)
+        return final_state
 
     # App
     st.set_page_config(layout="wide", page_title="tekio browser-use", page_icon="☸")
@@ -224,6 +239,12 @@ def main():
             disabled=st.session_state.get("chat_disabled", False),
         ):
             logger.info(f"Received user prompt: {prompt}")
+            agent_state = {
+                "user_input": prompt,
+                "router_decision": None,
+                "model": st.session_state.model,
+                "user_mesg": st.session_state.history.messages,
+            }
             # Display user message and add to history
             st.chat_message("user").write(prompt)
             st.session_state.history.add_user_message(prompt)
@@ -234,15 +255,7 @@ def main():
 
             # Process the prompt
             try:
-                agent_state = {
-                    "user_input": prompt,
-                    "router_decision": None,
-                    "model": st.session_state.model,
-                }
-                logger.debug(
-                    f"Running agent stream with model: {st.session_state.model}"
-                )
-                final_state = asyncio.run(agent.ainvoke(agent_state))
+                final_state = asyncio.run(run(agent_state=agent_state))
                 response_text = final_state.get("router_decision").message
                 logger.info(f"Agent router decision: {response_text}")
                 st.chat_message("assistant").write(response_text)

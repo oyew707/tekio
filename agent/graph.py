@@ -11,7 +11,6 @@ Email:   eo2233@nyu.edu
 from functools import partial
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from .tools import BrowserTools
 from .state import AgentState
 from .node import agent_node, router_node
@@ -19,16 +18,9 @@ from utils.logger import get_logger
 
 # Constants
 logger = get_logger(__name__, "info")
-MAX_STEPS = 20
-client = MultiServerMCPClient(
-    {
-        "playwright": {
-            "url": "http://playwright-mcp:8931/sse",
-            "transport": "sse",
-            "headers": {"Host": "localhost:8931"},
-        }
-    }
-)
+MAX_STEPS = 10
+
+
 AVAILABLE_AGENTIC_MODELS = [
     "browser-use-9b",
     "gemma4-12b-agentic",
@@ -69,17 +61,19 @@ def should_continue(state: AgentState) -> str:
     return "end"
 
 
-async def build_graph():
+async def build_graph(adapter):
     """
     -------------------------------------------------------
     Constructs and compiles the LangGraph workflow.
     -------------------------------------------------------
+    Parameters:
+        adapater - (MCPAdapter)
     Returns:
        app - The compiled LangGraph application (CompiledStateGraph)
     -------------------------------------------------------
     """
     logger.info("Fetching Playwright tools from MCP client")
-    playwright_browser_tools = await client.get_tools()
+    playwright_browser_tools = await adapter.list_tools()
     bb = BrowserTools(playwright_tools=playwright_browser_tools)
     cu_mapped_tools = bb.get_tools()
     logger.debug(f"Loaded {len(cu_mapped_tools)} tools")
@@ -92,7 +86,7 @@ async def build_graph():
         agent_node, tools=cu_mapped_tools, playright_tools=playwright_browser_tools
     )
     workflow.add_node("agent", agent_node_with_tools)
-    workflow.add_node("tools", ToolNode(cu_mapped_tools))
+    workflow.add_node("tools", ToolNode(cu_mapped_tools, handle_tool_errors=True))
     workflow.add_node("router", router_node)
     logger.info(f"Added all nodes")
 

@@ -17,22 +17,22 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
     ToolMessage,
+    BaseMessage,
 )
-from langchain_openai import ChatOpenAI
-from langchain_core.utils.function_calling import convert_to_openai_tool
 from langsmith.run_helpers import get_current_run_tree
 from typing import List, Literal
 from agent.prompt import SYSTEM_PROMPT, ROUTER_PROMPT
 from .state import AgentState
 from rag.store import TipStore
 from utils.logger import get_logger
+from utils.agent_utils import capture_and_build_screen_message
 
 # Constants
 logger = get_logger(__name__, "debug")
 rag_store: TipStore | None = TipStore()
 initial_tool_call = {
     "name": "visit_url",
-    "args": {"url": "https://google.com"},
+    "args": {"url": "https://duckduckgo.com"},
     "id": f"call_{uuid.uuid4().hex[:12]}",
 }
 observation_id = f"message_{uuid.uuid4().hex[:12]}"
@@ -61,12 +61,19 @@ class RouterOutput(BaseModel):
 async def agent_node(state: AgentState, tools: List, playright_tools: List):
     """
     -------------------------------------------------------
-    Inspects the state to determine the next path.
+    Runs the entire Agent
     -------------------------------------------------------
-    Parameters:
-       [parameter name - parameter description (parameter type and constraints)]
+    Parameters
+        state (AgentState) - The current agent state containing user_input, router_decision,
+            messages, iterations, trace_id, and model configuration.
+        tools (List) - List of agent tools available for tool calling (e.g., browser actions).
+        playright_tools (List) - List of Playwright tools for browser interaction (e.g., browser_evaluate,
+            browser_find, browser_take_screenshot).
     Returns:
-       [return value name - return value description (return value type)]
+        dict - A dictionary containing updates to state:
+            - messages (List[BaseMessage]): The message chain including system, human, and AI messages.
+            - trace_id (str, optional): The root trace ID if resolved from the state.
+            - iterations (int): Always returns 1, indicating the agent processes one iteration per call.
     -------------------------------------------------------
     """
     new_messages = []
@@ -91,27 +98,14 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
         return {
             "messages": [
                 SystemMessage(content=SYSTEM_PROMPT),
-                HumanMessage(content=task),
+                *state.get("user_mesg"),
                 AIMessage(content="", tool_calls=[initial_tool_call]),
             ],
             "iterations": 1,
         }
 
-    screenshot_tool = next(
-        tool for tool in playright_tools if tool.name == "browser_take_screenshot"
-    )
-    screenshot_resp = await screenshot_tool.ainvoke({})
-    logger.debug("Took screenshot")
-    sc_message = HumanMessage(
-        content=[
-            {"type": "text", "text": "Screenshot of the current screen."},
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:{screenshot_resp[1]['mime_type']};base64,{screenshot_resp[1]['base64']}"
-                },
-            },
-        ]
+    sc_message = await capture_and_build_screen_message(
+        playwright_tools=playright_tools
     )
 
     try:
@@ -206,7 +200,7 @@ def router_node(state: AgentState):
     if messages:
         last_message = messages[-1]
         if isinstance(last_message, ToolMessage):
-            tool_name = getattr(last_message, "tool_name", "unknown")
+            tool_name = get_tool_name_from_message(last_message, messages)
             tool_output = last_message.content
             logger.info(
                 f"Last message is tool call: {tool_name} | output: {tool_output[:50]}"
@@ -220,11 +214,11 @@ def router_node(state: AgentState):
                 }
             elif tool_name == "ask_user_question":
                 logger.info(
-                    "Tool call 'ask_user_question' detected, returning CONTINUE"
+                    "Tool call 'ask_user_question' detected, returning AWAITING_INPUT"
                 )
                 return {
                     "router_decision": RouterOutput(
-                        status="CONTINUE", message=tool_output
+                        status="AWAITING_INPUT", message=tool_output
                     )
                 }
             else:
@@ -256,3 +250,26 @@ def router_node(state: AgentState):
         f"Router decision: {decision.status} | message: {decision.message[:50]}"
     )
     return {"router_decision": decision}
+
+
+def get_tool_name_from_message(
+    tool_msg: ToolMessage, message_history: List[BaseMessage]
+) -> str:
+    """
+    -------------------------------------------------------
+    Finds the tool name by matching tool_call_id with prior AIMessages.
+    -------------------------------------------------------
+    Parameters:
+       tool_msg - Tool message we need to find the Tool name of [ToolMessage]
+       message_history - In order account of all prior messages (List)
+    Returns:
+       tool_name - the name of the tool correlated with tool_msg (str)
+    -------------------------------------------------------
+    """
+    target_id = tool_msg.tool_call_id
+    for msg in message_history[::-1]:
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            for tool_call in msg.tool_calls:
+                if tool_call["id"] == target_id:
+                    return tool_call["name"]
+    return None

@@ -26,7 +26,9 @@ class AgentState(MessagesState):
        model - The LLM (str)
        router_decision - has the decision to continue or not and accompanying message (see node.py)
        trace_id - Langsmith trace
-       messages - Historical messages (List)
+       messages - Historical messages of the AI (List)
+       user_mesg - Message between user and AI (List)
+       facts - Facts to include in AI run (str)
     -------------------------------------------------------
     """
 
@@ -35,3 +37,5 @@ class AgentState(MessagesState):
     router_decision: Dict
     model: str
     trace_id: str
+    user_mesg: list
+    facts: Annotated[list, operator.add]

@@ -10,14 +10,19 @@ Email:   eo2233@nyu.edu
 """
 
 # Imports
+import os
 import asyncio
-from typing import List
+import re
+from typing import List, Tuple
 from langchain_core.tools import ToolException, StructuredTool
 from utils.logger import get_logger
 from urllib.parse import quote_plus
+from dotenv import load_dotenv
+from utils.agent_utils import get_browser_state, BrowserState
 
 # Constants
-logger = get_logger(__name__, "info")
+load_dotenv()
+logger = get_logger(__name__, "debug")
 
 CUA_KEY_TO_PLAYWRIGHT_KEY = {
     "/": "Divide",
@@ -61,6 +66,7 @@ class BrowserTools:
     """
 
     DISPLAY_SIZE = 1000
+    VIEWPORT_SIZE = os.getenv("VIEWPORT_SIZE")
 
     def __init__(self, playwright_tools: List):
         """
@@ -72,11 +78,28 @@ class BrowserTools:
         -------------------------------------------------------
         """
         self.tools_map = {tool.name: tool for tool in playwright_tools}
-        self.viewport_height = 1444
-        self.viewport_width = 1000
+        self.viewport_height = int(self.VIEWPORT_SIZE.split("x")[1])
+        self.viewport_width = int(self.VIEWPORT_SIZE.split("x")[0])
         self.logger = get_logger(self.__class__.__name__, "debug")
 
-    def left_click(self, coordinates: tuple[int, int]):
+    def _normalized_scale_to_viewport(self, x: int, y: int) -> tuple[int, int]:
+        """
+        -------------------------------------------------------
+        Scales Normalized Coordinates from Model to viewport coordinates
+        -------------------------------------------------------
+        Parameters:
+            x - x coordinate in 1000 pixel (int)
+            y - y coordinate in 1000 pixel (int)
+        Returns:
+            new_x - actual coordinate (int)
+            new_y - actual coordinate in browser (int)
+        -------------------------------------------------------
+        """
+        pixel_x = round((x / self.DISPLAY_SIZE) * self.viewport_width)
+        pixel_y = round((y / self.DISPLAY_SIZE) * self.viewport_height)
+        return pixel_x, pixel_y
+
+    async def left_click(self, coordinates: tuple[int, int]):
         """
         -------------------------------------------------------
         Click the left mouse button.
@@ -100,18 +123,19 @@ class BrowserTools:
             )
         # Implement the click
         try:
-            resp = asyncio.run(
-                self.tools_map["browser_mouse_click_xy"].ainvoke(
-                    {"x": tgt_x, "y": tgt_y, "button": "left"}
-                )
+            n_tgt_x, n_tgt_y = self._normalized_scale_to_viewport(tgt_x, tgt_y)
+            resp = await self.tools_map["browser_mouse_click_xy"].ainvoke(
+                {"x": n_tgt_x, "y": n_tgt_y, "button": "left"}
             )
             self.logger.debug(f"Browser click response: {resp}")
+            if len(resp) > 0 and "### Error" in resp[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during browser click: {e}")
-            raise ToolException(f"Failed to click at {e}")
+            raise ToolException(f"Failed to click at {coordinates}")
         return f"I clicked at coordinates ({tgt_x}, {tgt_y})."
 
-    def right_click(self, coordinates: tuple[int, int]):
+    async def right_click(self, coordinates: tuple[int, int]):
         """
         -------------------------------------------------------
         Click the right mouse button.
@@ -135,20 +159,21 @@ class BrowserTools:
             )
         # Implement
         try:
-            response = asyncio.run(
-                self.tools_map["browser_mouse_click_xy"].ainvoke(
-                    {"x": tgt_x, "y": tgt_y, "button": "right"}
-                )
+            n_tgt_x, n_tgt_y = self._normalized_scale_to_viewport(tgt_x, tgt_y)
+            response = await self.tools_map["browser_mouse_click_xy"].ainvoke(
+                {"x": n_tgt_x, "y": n_tgt_y, "button": "right"}
             )
             self.logger.debug(f"Browser click response: {response}")
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during browser click: {e}")
-            raise ToolException(f"Failed to click at {e}")
+            raise ToolException(f"Failed to click at {coordinates}")
 
         self.logger.info(f"Right click completed at ({tgt_x}, {tgt_y}).")
         return f"I right-clicked at coordinates ({tgt_x}, {tgt_y})."
 
-    def key(self, keys: List = []):
+    async def key(self, keys: List = []):
         """
         -------------------------------------------------------
         Performs key down presses on the arguments passed in order, then
@@ -167,8 +192,8 @@ class BrowserTools:
                     key in CUA_KEY_TO_PLAYWRIGHT_KEY.keys()
                 ), f"{key} is not valid, Use one of the following keys: { CUA_KEY_TO_PLAYWRIGHT_KEY.keys()}"
                 playwright_key = CUA_KEY_TO_PLAYWRIGHT_KEY[key]
-                resp = asyncio.run(
-                    self.tools_map["browser_press_key"].ainvoke({"key": playwright_key})
+                resp = await self.tools_map["browser_press_key"].ainvoke(
+                    {"key": playwright_key}
                 )
                 self.logger.debug(f"Response after pressing {key}: {str(resp)}")
                 pressed.append(key)
@@ -176,7 +201,7 @@ class BrowserTools:
             logger.error(f"Could not press the following keys {keys[len(pressed):]}")
         return f"I pressed the following keys: {pressed}"
 
-    def mouse_move(self, coordinates: tuple[int, int]):
+    async def mouse_move(self, coordinates: tuple[int, int]):
         """
         -------------------------------------------------------
         Move the cursor to a specified (x, y) pixel coordinate on the screen.
@@ -201,35 +226,55 @@ class BrowserTools:
             )
         # Implement
         try:
-            response = asyncio.run(
-                self.tools_map["browser_mouse_move_xy"].ainvoke(
-                    {"x": tgt_x, "y": tgt_y}
-                )
+            n_tgt_x, n_tgt_y = self._normalized_scale_to_viewport(tgt_x, tgt_y)
+            response = await self.tools_map["browser_mouse_move_xy"].ainvoke(
+                {"x": n_tgt_x, "y": n_tgt_y}
             )
             self.logger.debug(f"Browser mouse move response: {response}")
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
-            raise ToolException(f"Failed to move mouse due to {e}")
+            raise ToolException(f"Failed to move mouse due to {coordinates}")
 
         self.logger.info(f"Mouse moved to ({tgt_x}, {tgt_y}).")
         return f"I moved the cursor to ({tgt_x}, {tgt_y})."
 
-    def type(self, text: str) -> str:
+    async def type(self, text: str = "") -> str:
         """
         -------------------------------------------------------
         Type a string of text on the keyboard.
         -------------------------------------------------------
         Parameters:
-            text - text to type
+            text - text to type (str)
         Returns:
-            tool response
+            tool response (str)
         -------------------------------------------------------
         """
         self.logger.info(f"Type requested for: {text}")
-        # TODO - figure out how to get target and or element
-        raise ToolException("Not Implemented yet")
+        # Find active element
+        try:
+            browser_state: BrowserState = await get_browser_state(
+                self.tools_map["browser_snapshot"]
+            )
+            self.logger.debug(f"Current Browser State: {str(browser_state)}")
+            target_element = browser_state.active_element.refid
+            self.logger.debug(f"Typing {text} into {str(browser_state.active_element)}")
+            response = await self.tools_map["browser_type"].ainvoke(
+                {
+                    "text": text,
+                    "submit": True,
+                    "target": target_element,
+                }
+            )
+            self.logger.debug(f"I typed {text} on keyboard : {str(response)}")
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
+        except Exception as e:
+            self.logger.error(f"Failed to type into active field", str(e))
+            raise ToolException(f"Failed to type {text} into active field")
         return f"I typed '{text}'."
 
-    def scroll(self, pixels):
+    async def scroll(self, pixels: int = 0) -> str:
         """
         -------------------------------------------------------
         Performs a scroll of the mouse scroll wheel.
@@ -244,20 +289,20 @@ class BrowserTools:
         self.logger.info(f"Scroll requested by {pixels} pixels")
         delta = int(pixels * self.viewport_height / self.DISPLAY_SIZE)
         try:
-            response = asyncio.run(
-                self.tools_map["browser_mouse_wheel"].ainvoke(
-                    {"deltaX": delta, "deltaY": 0}
-                )
+            response = await self.tools_map["browser_mouse_wheel"].ainvoke(
+                {"deltaX": delta, "deltaY": 0}
             )
             self.logger.debug(f"Browser wheel response: {response}")
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during scroll: {e}")
-            raise ToolException(f"Failed to move mouse due to {e}")
+            raise ToolException(f"Failed to scroll")
         direction = "up" if pixels > 0 else "down"
         self.logger.info(f"Scrolled {direction}.")
         return f"I scrolled {direction}."
 
-    def hscroll(self, pixels):
+    async def hscroll(self, pixels: int = 0) -> str:
         """
         -------------------------------------------------------
         Performs a horizontal scroll (mapped to regular scroll).
@@ -272,20 +317,20 @@ class BrowserTools:
         self.logger.info(f"Horizontal scroll requested by {pixels} pixels")
         delta = int(pixels * self.viewport_width / self.DISPLAY_SIZE)
         try:
-            response = asyncio.run(
-                self.tools_map["browser_mouse_wheel"].ainvoke(
-                    {"deltaX": 0, "deltaY": delta}
-                )
+            response = await self.tools_map["browser_mouse_wheel"].ainvoke(
+                {"deltaX": 0, "deltaY": delta}
             )
             self.logger.debug(f"Browser wheel response: {response}")
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during horizontal scroll: {e}")
-            raise ToolException(f"Failed to move mouse due to {e}")
+            raise ToolException(f"Failed to scroll horizontally")
 
         self.logger.info(f"Horizontally scrolled by {pixels} pixels.")
         return f"I scrolled horizontally by {pixels} pixels."
 
-    def double_click(self, coordinates: tuple[int, int]) -> str:
+    async def double_click(self, coordinates: tuple[int, int]) -> str:
         """
         -------------------------------------------------------
         Double-click the left mouse button.
@@ -309,19 +354,19 @@ class BrowserTools:
             )
         # Implement the click
         try:
-            response = asyncio.run(
-                self.tools_map["browser_mouse_click_xy"].ainvoke(
-                    {"x": tgt_x, "y": tgt_y, "button": "left", "clickCount": 2}
-                )
+            response = await self.tools_map["browser_mouse_click_xy"].ainvoke(
+                {"x": tgt_x, "y": tgt_y, "button": "left", "clickCount": 2}
             )
             self.logger.debug(f"Browser double click response: {response}")
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during double click: {e}")
-            raise ToolException(f"Failed to double-click at {e}")
+            raise ToolException(f"Failed to double-click at {coordinates}")
         self.logger.info(f"Double clicked at ({tgt_x}, {tgt_y}).")
         return f"I double-clicked at coordinates ({tgt_x}, {tgt_y})."
 
-    def triple_click(self, coordinates: tuple[int, int]):
+    async def triple_click(self, coordinates: tuple[int, int]) -> str:
         """
         -------------------------------------------------------
         Triple-click the left mouse button (e.g. to select a line of text).
@@ -346,20 +391,20 @@ class BrowserTools:
             )
         # Implement
         try:
-            response = asyncio.run(
-                self.tools_map["browser_mouse_click_xy"].ainvoke(
-                    {"x": tgt_x, "y": tgt_y, "button": "left", "clickCount": 3}
-                )
+            response = await self.tools_map["browser_mouse_click_xy"].ainvoke(
+                {"x": tgt_x, "y": tgt_y, "button": "left", "clickCount": 3}
             )
             self.logger.debug(f"Browser triple click response: {response}")
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during triple click: {e}")
-            raise ToolException(f"Failed to triple-click at {e}")
+            raise ToolException(f"Failed to triple-click at {coordinates}")
 
         self.logger.info(f"Triple clicked at ({tgt_x}, {tgt_y}).")
         return f"I triple-clicked at coordinates ({tgt_x}, {tgt_y})."
 
-    def left_click_drag(
+    async def left_click_drag(
         self, start_coordinates: tuple[int, int], end_coordinates: tuple[int, int]
     ) -> str:
         """
@@ -381,20 +426,22 @@ class BrowserTools:
             f"Drag requested from ({tgt_x_stt}, {tgt_y_stt}) to ({tgt_x_end}, {tgt_y_end})"
         )
         try:
-            response = asyncio.run(
-                self.tools_map["browser_mouse_drag_xy"].ainvoke(
-                    {
-                        "startX": tgt_x_stt,
-                        "startY": tgt_y_stt,
-                        "endX": tgt_x_end,
-                        "endY": tgt_y_end,
-                    }
-                )
+            response = await self.tools_map["browser_mouse_drag_xy"].ainvoke(
+                {
+                    "startX": tgt_x_stt,
+                    "startY": tgt_y_stt,
+                    "endX": tgt_x_end,
+                    "endY": tgt_y_end,
+                }
             )
             self.logger.debug(f"Browser drag response: {response}")
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during drag: {e}")
-            raise ToolException(f"Failed to Left click drag due to {e}")
+            raise ToolException(
+                f"Failed to Left click drag from {start_coordinates} to {end_coordinates}"
+            )
 
         self.logger.info(
             f"Dragged from ({tgt_x_stt}, {tgt_y_stt}) to ({tgt_x_end}, {tgt_y_end})."
@@ -403,7 +450,7 @@ class BrowserTools:
             f"I dragged from ({tgt_x_stt}, {tgt_y_stt}) to ({tgt_x_end}, {tgt_y_end})."
         )
 
-    def visit_url(self, url: str = "") -> str:
+    async def visit_url(self, url: str = "") -> str:
         """
         -------------------------------------------------------
         Visit a specified URL.
@@ -418,18 +465,20 @@ class BrowserTools:
         if url.startswith(("https://", "http://", "file://", "about:")):
             target = url
         elif " " in url:
-            target = f"https://www.google.com/search?q={quote_plus(url)}"
+            target = f"https://www.duckduckgo.com/search?q={quote_plus(url)}"
         else:
             target = "https://" + url
         try:
-            asyncio.run(self.tools_map["browser_navigate"].ainvoke({"url": target}))
+            response = await self.tools_map["browser_navigate"].ainvoke({"url": target})
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during navigation: {e}")
-            raise ToolException(f"I tried to navigate to {url} but it failed: {e}")
+            raise ToolException(f"I tried to navigate to {url} but it failed")
         self.logger.info(f"Navigated to {target}.")
         return f"I navigated to {url}."
 
-    def history_back(self) -> str:
+    async def history_back(self) -> str:
         """
         -------------------------------------------------------
         Go back to the previous page in the browser history.
@@ -440,14 +489,16 @@ class BrowserTools:
         """
         self.logger.info(f"Navigate to previous page requested")
         try:
-            asyncio.run(self.tools_map["browser_navigate_back"].ainvoke({}))
+            response = await self.tools_map["browser_navigate_back"].ainvoke({})
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during history back: {e}")
-            raise ToolException(f"I tried to navigate back but it failed: {e}")
+            raise ToolException(f"I tried to navigate back but it failed")
 
         return "I clicked the browser back button."
 
-    def web_search(self, query: str) -> str:
+    async def web_search(self, query: str = "") -> str:
         """
         -------------------------------------------------------
         Perform a web search with a specified query.
@@ -460,11 +511,11 @@ class BrowserTools:
         """
         self.logger.info(f"Web search requested for: {query}")
         try:
-            response = asyncio.run(
-                self.tools_map["browser_navigate"].ainvoke(
-                    {"url": f"https://www.google.com/search?q={quote_plus(query)}"}
-                )
+            response = await self.tools_map["browser_navigate"].ainvoke(
+                {"url": f"https://www.duckduckgo.com/search?q={quote_plus(query)}"}
             )
+            if len(response) > 0 and "### Error" in response[0].get("text", ""):
+                raise Exception("Some error arised")
         except Exception as e:
             self.logger.error(f"Error during web search: {e}")
             raise ToolException(f"I tried to search for {query} but it failed: {e}")
@@ -472,7 +523,7 @@ class BrowserTools:
         self.logger.info(f"Web search completed for: {query}.")
         return f"I searched for '{query}'."
 
-    def ask_user_question(self, question: str) -> str:
+    async def ask_user_question(self, question: str = "") -> str:
         """
         -------------------------------------------------------
         Ask the user a clarifying question and wait for a response.
@@ -486,7 +537,7 @@ class BrowserTools:
         self.logger.info(f"User question requested: {question}")
         return f"I asked the user: {question}"
 
-    def wait(self, time: int) -> str:
+    async def wait(self, time: int = 3) -> str:
         """
         -------------------------------------------------------
         Wait specified seconds for the change to happen.
@@ -498,11 +549,11 @@ class BrowserTools:
         -------------------------------------------------------
         """
         self.logger.info(f"Wait requested for {time}s")
-        asyncio.run(self.tools_map["browser_wait_for"].ainvoke({"time": time}))
+        await self.tools_map["browser_wait_for"].ainvoke({"time": time})
         self.logger.debug(f"Wait completed for {time}s.")
         return f"I waited {time}s."
 
-    def pause_and_memorize_fact(self, fact: str) -> str:
+    async def pause_and_memorize_fact(self, fact: str = "") -> Tuple[str, dict]:
         """
         -------------------------------------------------------
         Pause and memorize a fact for future reference.
@@ -514,10 +565,9 @@ class BrowserTools:
         -------------------------------------------------------
         """
         self.logger.info(f"Fact memorized: {fact}")
-        # TODO: Implement
-        return f"I memorized the following fact: {fact}"
+        return f"I memorized the following fact: {fact}", {"facts": [fact]}
 
-    def terminate(self, answer) -> str:
+    async def terminate(self, answer) -> str:
         """
         -------------------------------------------------------
         Terminate the current task and provide the final answer.
@@ -561,8 +611,14 @@ class BrowserTools:
 
         return [
             StructuredTool.from_function(
-                func=getattr(self, method),
+                coroutine=getattr(self, method),
+                name=method,
                 parse_docstring=True,
+                response_format=(
+                    "content_and_artifact"
+                    if method == "pause_and_memorize_fact"
+                    else "content"
+                ),
             )
             for method in tool_methods
         ]
