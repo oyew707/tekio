@@ -8,11 +8,55 @@ Email:   eo2233@nyu.edu
 """
 
 # Imports
-from typing import Dict, Annotated
+from typing import Dict, Annotated, Optional, List
 from langgraph.graph import MessagesState
 import operator
+from pydantic import BaseModel, Field
 
 # Constants
+
+
+class BeliefUpdate(BaseModel):
+    """
+    -------------------------------------------------------
+    Update to the representation of the agent's current understanding
+    -------------------------------------------------------
+    Parameters:
+        sub_goal - The current specific task being worked on (str)
+        action_history_summary - A brief summary of recent actions taken (str)
+        environment_hypotheses - Current hypothesis about the state of the environment/page (str)
+    -------------------------------------------------------
+    """
+
+    sub_goal: Optional[str] = Field(
+        description="The current specific task being worked on"
+    )
+    action_history_summary: Optional[str] = Field(
+        description="A brief summary of recent actions taken"
+    )
+    environment_hypotheses: Optional[str] = Field(
+        description="Current hypothesis about the state of the environment/page"
+    )
+
+
+class BeliefState(BeliefUpdate):
+    """
+    -------------------------------------------------------
+    Structured representation of the agent's current understanding
+    -------------------------------------------------------
+    Parameters:
+        user_goal - The high-level objective provided by the user (str)
+        sub_goal - The current specific task being worked on (str)
+        extracted_facts - Key information gathered so far (List[str])
+        action_history_summary - A brief summary of recent actions taken (str)
+        environment_hypotheses - Current hypothesis about the state of the environment/page (str)
+    -------------------------------------------------------
+    """
+
+    user_goal: str = Field(description="The high-level objective provided by the user")
+    extracted_facts: Annotated[list, operator.add] = Field(
+        description="Key information gathered so far"
+    )
 
 
 class AgentState(MessagesState):
@@ -28,7 +72,7 @@ class AgentState(MessagesState):
        trace_id - Langsmith trace
        messages - Historical messages of the AI (List)
        user_mesg - Message between user and AI (List)
-       facts - Facts to include in AI run (str)
+       belief - Belief state to include in the AI run (str)
     -------------------------------------------------------
     """
 
@@ -38,4 +82,4 @@ class AgentState(MessagesState):
     model: str
     trace_id: str
     user_mesg: list
-    facts: Annotated[list, operator.add]
+    belief: BeliefState = None

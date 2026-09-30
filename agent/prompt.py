@@ -8,6 +8,7 @@ Email:   eo2233@nyu.edu
 """
 
 # Imports
+from state import BeliefState
 
 # Constants
 
@@ -48,3 +49,33 @@ You must respond with a structured JSON object matching the RouterOutput schema.
 User Input: {user_input}
 Last Message: {prev_message}
 """
+
+
+def format_belief_state(belief: BeliefState) -> str:
+    """
+    -------------------------------------------------------
+    Converts a BeliefState object into a structured text representation
+    suitable for inclusion in LLM prompts.
+    -------------------------------------------------------
+    Parameters:
+       beleif - structured representation of the beleif
+    Returns:
+       beleif_str - string representation of the belief
+    -------------------------------------------------------
+    """
+    lines = [
+        f"### Current Belief State ###",
+        f"User Goal: {belief.user_goal}",
+        f"Current Sub-goal: {belief.sub_goal or 'N/A'}",
+    ]
+
+    if belief.extracted_facts:
+        lines.append("Extracted Facts:")
+        for fact in belief.extracted_facts:
+            lines.append(f"- {fact}")
+    else:
+        lines.append("Extracted Facts: None")
+
+    lines.append(f"Action History Summary: {belief.action_history_summary or 'N/A'}")
+    lines.append(f"Environment Hypotheses: {belief.environment_hypotheses or 'N/A'}")
+    return "\n".join(lines)

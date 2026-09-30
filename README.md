@@ -47,13 +47,14 @@ Tekio is an advanced, asynchronous AI agent framework designed to execute comple
 
 ### System Architecture
 The system is highly decoupled and distributed across several services:
-*   **Agent Node (`agent/node.py`):** The core reasoning engine orchestrating tool use, planning, and execution. This intelligence is powered by advanced capabilities mapped from **Fara 1.5B** and controls actions via **Playwright MCP tools**.
+*   **Agent Node (`agent/node.py`):** The core reasoning engine orchestrating tool use, planning, and execution. It implements a **Partially Observable Markov Decision Process (POMDP)** framework, maintaining a structured **Belief State** to track environment hypotheses and task progress. This allows for robust decision-making and efficient context management via a Markovian message window. This is powered by advanced capabilities mapped from **Fara 1.5B** and controls actions via **Playwright MCP tools**.
 *   **Orchestration Layer:** The reasoning process utilizes **LangChain** and **LangGraph** for sophisticated, stateful orchestration across multiple thought steps.
 *   **Worker Services (`workers/`):** Dedicated microservices handle computationally expensive background tasks. The trajectory processing module employs advanced learning mechanisms inspired by the work in **arXiv:2603.10600**.
 *   **Frontend (`frontend/streamlit_app.py`):** The user interface responsible for task submission and result visualization, integrated with a message queuing system for asynchronous operation.
 
 ### Key Features
 *   **Asynchronous Processing:** Tasks are offloaded via a robust message queue system (RabbitMQ), enabling long-running operations without timeouts.
+*   **Belief-Driven Reasoning:** Employs a structured belief-tracking loop to maintain a consistent internal model of the environment, enabling effective decision-making even when the environment is partially observable.
 *   **Advanced Reasoning:** Utilizes sophisticated planning algorithms powered by the integrated LLM stack.
 *   **Scalability:** Designed for high availability using a containerized stack defined in `docker-compose.yml`.
 

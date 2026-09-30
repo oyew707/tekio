@@ -253,5 +253,6 @@ async def capture_and_build_screen_message(
                 "type": "image_url",
                 "image_url": {"url": f"data:{mime_type};base64,{image_enc}"},
             },
-        ]
+        ],
+        additional_kwargs={"type": "observation"},
     )

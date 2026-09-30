@@ -19,13 +19,15 @@ from langchain_core.messages import (
     ToolMessage,
     BaseMessage,
 )
+from langchain_core.messages.utils import trim_messages
 from langsmith.run_helpers import get_current_run_tree
-from typing import List, Literal
-from agent.prompt import SYSTEM_PROMPT, ROUTER_PROMPT
+from typing import List, Literal, Optional
+from agent.prompt import SYSTEM_PROMPT, ROUTER_PROMPT, format_belief_state
 from .state import AgentState
 from rag.store import TipStore
 from utils.logger import get_logger
 from utils.agent_utils import capture_and_build_screen_message
+from state import BeliefState, BeliefUpdate
 
 # Constants
 logger = get_logger(__name__, "debug")
@@ -47,8 +49,6 @@ class RouterOutput(BaseModel):
     Parameters:
         status - to determine whether to go back to the agent or user
         message - message to Agent to continue its workflow or to user if complete (str)
-    Returns:
-        RouterOutput - Structured output of next steps (RouterOutput)
     -------------------------------------------------------
     """
 
@@ -76,6 +76,7 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
             - iterations (int): Always returns 1, indicating the agent processes one iteration per call.
     -------------------------------------------------------
     """
+    # Arrange
     new_messages = []
     logger.info(f"Starting agent_node with trace_id: {state.get('trace_id')}")
     trace_id = None
@@ -83,45 +84,6 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
         run_tree = get_current_run_tree()
         trace_id = str(run_tree.trace_id) if run_tree else None
         logger.info(f"Resolved root trace_id: {trace_id}")
-
-    task = (
-        state.get("user_input")
-        if state.get("router_decision") is None
-        else state.get("router_decision").message
-    )
-    logger.debug(f"Task for agent: {task}")
-
-    if state.get("iterations") < 1:
-        logger.info(
-            "First iteration detected. Returning initial tool call to navigate to google.com"
-        )
-        return {
-            "messages": [
-                SystemMessage(content=SYSTEM_PROMPT),
-                *state.get("user_mesg"),
-                AIMessage(content="", tool_calls=[initial_tool_call]),
-            ],
-            "iterations": 1,
-        }
-
-    sc_message = await capture_and_build_screen_message(
-        playwright_tools=playright_tools
-    )
-
-    try:
-        rag_hits = rag_store.query(task, k=3) if rag_store else []
-        rag_tips = [item["content"] for item in rag_hits]
-        logger.info(f"Retrieved {len(rag_hits)} rag hits")
-
-        if len(rag_hits) > 0:
-            formatted = "\n".join(f"- {tip}" for tip in rag_tips)
-            rag_tips = "Prior Guidance:\n" f"{formatted}\n"
-            new_messages.append(HumanMessage(content=rag_tips))
-    except Exception as e:
-        logger.error(f"Failed to retrieve tips {e}")
-
-    # Create the model
-    # tools = [convert_to_openai_tool(tool) for tool in tools]
     llm = ChatQwen(
         api_base=os.environ["API_BASE_URL"],
         api_key=os.environ["API_KEY"],
@@ -129,17 +91,82 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
         streaming=True,
         enable_thinking=True,
     )
+    structured_belief_llm = llm.with_structured_output(BeliefUpdate)
     llm_with_tools = llm.bind_tools(tools=tools)
     logger.debug("Model initialized with tools and streaming")
 
-    # # Invoke the Agent
-    # if state.get("router_decision") is not None:
-    #     decision = state.get("router_decision").message
-    #     new_messages.append(AIMessage(content=decision))
-    #     logger.debug(f"Previous Router Message added to message chain: {decision}")
+    # Capture Observations
+    sc_message = await capture_and_build_screen_message(
+        playwright_tools=playright_tools
+    )
+    new_messages.append(sc_message)
 
-    prompt_chain = state["messages"] + new_messages + [sc_message]
+    # Process initial run
+    if state.get("messages") <= 1:
+        logger.info(
+            "First iteration detected. Returning initial tool call to navigate to google.com"
+        )
+        belief_0 = BeliefState(
+            user_goal=state.get("user_mesg"), extracted_facts=state.get("facts")
+        )
+        return {
+            "messages": [
+                SystemMessage(content=SYSTEM_PROMPT),
+                # HumanMessage(content=format_belief_state(belief_0), additional_kwargs={"type": "belief"})
+                # TODO Add a condition to check whether we are on a blank page
+                # AIMessage(content="", tool_calls=[initial_tool_call]),
+            ],
+            "iterations": 1,
+            "belief": belief_0,
+        }
+
+    # Update Belief State
+    try:
+        belief_prompt = [
+            SystemMessage(
+                content="You are a state tracker. Update the agent's belief state based on the current progress."
+            ),
+            HumanMessage(content=format_belief_state(state["belief"])),
+            sc_message,
+        ]
+        belief_data: BeliefState = await structured_belief_llm.ainvoke(belief_prompt)
+    except Exception as e:
+        logger.error(f"Failed to generate belief state: {e}")
+        belief_data: BeliefState = state["belief"]
+
+    # Get Tips based on goals
+    try:
+        rag_hits = (
+            rag_store.query(belief_data.sub_goal or belief_data.user_goal, k=3)
+            if rag_store
+            else []
+        )
+        rag_tips = [item["content"] for item in rag_hits]
+        logger.info(f"Retrieved {len(rag_hits)} rag hits")
+
+        if len(rag_hits) > 0:
+            formatted = "\n".join(f"- {tip}" for tip in rag_tips)
+            rag_tips = "Prior Guidance:\n" f"{formatted}\n"
+    except Exception as e:
+        logger.error(f"Failed to retrieve tips {e}")
+        rag_tips = ""
+
+    # Add and Truncate messages
+    markov_filter = trim_messages(
+        strategy="last",
+        max_tokens=10,  # Keeps the last 10 messages
+        token_counter=len,  # token counter is messages
+        start_on="human",
+        include_system=True,
+    )
+    prompt_chain = (
+        markov_filter.invoke(state["messages"])
+        + new_messages
+        + HumanMessage(content=rag_tips + format_belief_state(belief_data))
+    )
     logger.debug(f"Sending message chain of length: {len(prompt_chain)}")
+
+    # Execute policy
     response = await llm_with_tools.ainvoke(prompt_chain)
 
     # Pull out the reasoning content and rebuild response message
