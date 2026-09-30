@@ -12,3 +12,6 @@ langchain-community~=0.4.2
 langsmith~=0.14.0
 fastmcp~=4.0.0
 langgraph-api~=0.11.0
+openai>=3.22.0
+pydantic>=2.13.5
+laya>=0.3.22

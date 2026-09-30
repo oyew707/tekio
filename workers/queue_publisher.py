@@ -8,10 +8,12 @@ Email:   eo2233@nyu.edu
 """
 
 # Imports
+
 import json
 import os
 from typing import Any
 import pika
+from dotenv import load_dotenv
 
 # Constants
 

@@ -132,11 +132,11 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
     llm_with_tools = llm.bind_tools(tools=tools)
     logger.debug("Model initialized with tools and streaming")
 
-    # Invoke the Agent
-    if state.get("router_decision") is not None:
-        decision = state.get("router_decision").message
-        new_messages.append(AIMessage(content=decision))
-        logger.debug(f"Previous Router Message added to message chain: {decision}")
+    # # Invoke the Agent
+    # if state.get("router_decision") is not None:
+    #     decision = state.get("router_decision").message
+    #     new_messages.append(AIMessage(content=decision))
+    #     logger.debug(f"Previous Router Message added to message chain: {decision}")
 
     prompt_chain = state["messages"] + new_messages + [sc_message]
     logger.debug(f"Sending message chain of length: {len(prompt_chain)}")

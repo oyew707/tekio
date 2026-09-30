@@ -27,6 +27,7 @@ logger = get_logger(__name__, "info")
 SCREENSHOT_PLACEHOLDER = os.path.join(os.getcwd(), "frontend/dino_game.webp")
 CDP_ENDPOINT = os.getenv("CDP_ENDPOINT", "http://localhost:9222")
 QUEUE_ENDPOINT = os.getenv("RABBITMQ_URL")
+QUEUE_NAME = os.environ.get("QUEUE_NAME", "trajectory_ready")
 STREAMLIT_STYLE = """
 <style>
     /* Hide the streamlit deploy button */
@@ -264,7 +265,7 @@ def main():
                     logger.debug(
                         f"Publishing trajectory for trace_id: {final_state.get('trace_id')}"
                     )
-                    TrajectoryQueuePublisher().publish(
+                    TrajectoryQueuePublisher(queue_name=QUEUE_NAME).publish(
                         trace_id=final_state.get("trace_id"),
                         task=prompt,
                         status="completed",

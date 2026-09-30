@@ -73,5 +73,17 @@ services:
     ports:
       - "8501:8501"
 
+  queue_consumer:
+    build: .
+    volumes:
+      - ./:/workspace
+    depends_on:
+      - postgres
+      - rabbitmq
+    env_file:
+      - .env
+    command: sh -c "pip install pika psycopg2-binary && python workers/queue_consumer.py"
+    restart: unless-stopped
+
 volumes:
   pgdata_v2:
