@@ -55,8 +55,8 @@ class DecisionChain(BaseModel):
     """
 
     step: int
-    decision: str  
-    consequence: str  
+    decision: str
+    consequence: str
     causal_role: Literal[
         "root_cause",
         "proximate_cause",
@@ -120,9 +120,9 @@ class EfficiencyIssue(BaseModel):
     -------------------------------------------------------
     """
 
-    steps: List[int]  
-    issue: str  
-    better_approach: str  
+    steps: List[int]
+    issue: str
+    better_approach: str
 
 
 class TrajectoryAnalyzerOutput(BaseModel):
@@ -163,16 +163,17 @@ RULES:
 - Output ONLY valid JSON`
 """
 
+
 class Tip(BaseModel):
     """
     -------------------------------------------------------
-    A structured guide or solution (Tip) designed to improve agent performance 
+    A structured guide or solution (Tip) designed to improve agent performance
     in specific operational areas.
     -------------------------------------------------------
     Properties:
        category (Literal[str]): A categorization of the tip.
-       priority (Literal[str]): 
-       tags  (List[str]): 
+       priority (Literal[str]):
+       tags  (List[str]):
        domain (str):
        content (str): The core recommendation or solution description.
        purpose (str): Why this tip is being provided (the goal).
@@ -181,24 +182,28 @@ class Tip(BaseModel):
        negative_example (str): A specific scenario where *not* following this tip fails.
     -------------------------------------------------------
     """
-    
+
     category: Literal["strategy", "recovery", "optimization"] = "strategy"
-    priority: Literal['critical', 'high', 'medium', 'low'] = "medium"
+    priority: Literal["critical", "high", "medium", "low"] = "medium"
     tags: List[str] = []
     domain: str
-    content: str  
-    purpose: str 
-    trigger: str  
-    steps: List[str]  
-    negative_example: Optional[str]  
-    
+    content: str
+    purpose: str
+    trigger: str
+    steps: List[str]
+    negative_example: Optional[str]
+
+
 class TipList(BaseModel):
     """
     -------------------------------------------------------
     Lists of Tips
     -------------------------------------------------------
     """
-    tips: List[Tip] = Field(max_length=5, description="A list of extracted Tips, With a maximum of 5 tips")
+
+    tips: List[Tip] = Field(
+        max_length=5, description="A list of extracted Tips, With a maximum of 5 tips"
+    )
 
 
 TIP_EXTRACTION_PROMPT = """
