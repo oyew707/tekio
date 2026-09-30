@@ -257,7 +257,7 @@ def main():
             # Process the prompt
             try:
                 final_state = asyncio.run(run(agent_state=agent_state))
-                response_text = final_state.get("router_decision").message
+                response_text = final_state.get("message")[-1].content
                 logger.info(f"Agent router decision: {response_text}")
                 st.chat_message("assistant").write(response_text)
                 st.session_state.history.add_ai_message(response_text)

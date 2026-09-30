@@ -11,7 +11,7 @@ Email:   eo2233@nyu.edu
 import os
 import uuid
 from langchain_qwq import ChatQwen
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from langchain_core.messages import (
     AIMessage,
     HumanMessage,
@@ -19,15 +19,15 @@ from langchain_core.messages import (
     ToolMessage,
     BaseMessage,
 )
+from laya.integrations.langchain import LayaRouter
 from langchain_core.messages.utils import trim_messages
 from langsmith.run_helpers import get_current_run_tree
-from typing import List, Literal, Optional
+from typing import List, Literal
 from agent.prompt import SYSTEM_PROMPT, ROUTER_PROMPT, format_belief_state
-from .state import AgentState
+from .state import AgentState, BeliefState, BeliefUpdate
 from rag.store import TipStore
 from utils.logger import get_logger
-from utils.agent_utils import capture_and_build_screen_message
-from state import BeliefState, BeliefUpdate
+from utils.agent_utils import capture_and_build_screen_message, contains_target_string
 
 # Constants
 logger = get_logger(__name__, "debug")
@@ -38,6 +38,18 @@ initial_tool_call = {
     "id": f"call_{uuid.uuid4().hex[:12]}",
 }
 observation_id = f"message_{uuid.uuid4().hex[:12]}"
+router = LayaRouter(
+    criteria={
+        "continue": "task is ongoing, needs more steps, or tool execution is successful",
+        "succeeded": "task is complete, goal achieved, or user is satisfied",
+        "failed": "task cannot be completed, error encountered, or impossible request",
+        "awaiting_input": "need clarification from user, user interaction required",
+    },
+    instructions="Determine the next step for the agent based on the conversation history.",
+    confidence_threshold=0.70,
+    fallback="continue",
+    state_key="messages",
+)
 
 
 class RouterOutput(BaseModel):
@@ -48,13 +60,9 @@ class RouterOutput(BaseModel):
     -------------------------------------------------------
     Parameters:
         status - to determine whether to go back to the agent or user
-        message - message to Agent to continue its workflow or to user if complete (str)
     -------------------------------------------------------
     """
 
-    message: str = Field(
-        description="message to Agent to continue its workflow or to user if complete"
-    )
     status: Literal["CONTINUE", "SUCCEEDED", "FAILED", "AWAITING_INPUT"]
 
 
@@ -102,19 +110,21 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
     new_messages.append(sc_message)
 
     # Process initial run
-    if state.get("messages") <= 1:
-        logger.info(
-            "First iteration detected. Returning initial tool call to navigate to google.com"
-        )
+    if len(state.get("messages")) <= 1:
+        logger.info("First iteration detected.")
         belief_0 = BeliefState(
-            user_goal=state.get("user_mesg"), extracted_facts=state.get("facts")
+            user_goal=state.get("user_input"),
+            extracted_facts=[],
         )
         return {
             "messages": [
                 SystemMessage(content=SYSTEM_PROMPT),
-                # HumanMessage(content=format_belief_state(belief_0), additional_kwargs={"type": "belief"})
-                # TODO Add a condition to check whether we are on a blank page
-                # AIMessage(content="", tool_calls=[initial_tool_call]),
+                *state.get("user_mesg"),
+                *(
+                    [AIMessage(content="", tool_calls=[initial_tool_call])]
+                    if contains_target_string(sc_message, "Current URL: None")
+                    else []
+                ),
             ],
             "iterations": 1,
             "belief": belief_0,
@@ -126,10 +136,14 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
             SystemMessage(
                 content="You are a state tracker. Update the agent's belief state based on the current progress."
             ),
+            state.get("messages")[-3],
             HumanMessage(content=format_belief_state(state["belief"])),
             sc_message,
         ]
-        belief_data: BeliefState = await structured_belief_llm.ainvoke(belief_prompt)
+        belief_update: BeliefUpdate = await structured_belief_llm.ainvoke(belief_prompt)
+        belief_data: BeliefState = state["belief"].model_copy(
+            update=belief_update.model_dump()
+        )
     except Exception as e:
         logger.error(f"Failed to generate belief state: {e}")
         belief_data: BeliefState = state["belief"]
@@ -147,6 +161,8 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
         if len(rag_hits) > 0:
             formatted = "\n".join(f"- {tip}" for tip in rag_tips)
             rag_tips = "Prior Guidance:\n" f"{formatted}\n"
+        else:
+            rag_tips = ""
     except Exception as e:
         logger.error(f"Failed to retrieve tips {e}")
         rag_tips = ""
@@ -162,7 +178,7 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
     prompt_chain = (
         markov_filter.invoke(state["messages"])
         + new_messages
-        + HumanMessage(content=rag_tips + format_belief_state(belief_data))
+        + [HumanMessage(content=rag_tips + format_belief_state(belief_data))]
     )
     logger.debug(f"Sending message chain of length: {len(prompt_chain)}")
 
@@ -256,27 +272,17 @@ def router_node(state: AgentState):
                     )
                 }
 
-    llm = ChatQwen(
-        api_base=os.environ["API_BASE_URL"],
-        api_key=os.environ["API_KEY"],
-        model=state.get("model", "browser-use-9b"),
-        streaming=True,
-    )
-    runnable = llm.with_structured_output(
-        schema=RouterOutput, include_raw=False, method="json_mode"
-    )
-    prompt = ROUTER_PROMPT.format(user_input=state["user_input"])
-    logger.debug(f"Router prompt generated: {prompt[:100]}...")
-    messages = [
-        *state.get("messages", []),
-        HumanMessage(content=prompt),
-    ]
+    # Using laya router
+    route = router.invoke(state)
+    logger.info(f"LayaRouter decision: {route}")
 
-    decision = runnable.invoke(messages)
-    logger.info(
-        f"Router decision: {decision.status} | message: {decision.message[:50]}"
+    status = (
+        route.upper()
+        if route in ["continue", "succeeded", "failed", "awaiting_input"]
+        else "CONTINUE"
     )
-    return {"router_decision": decision}
+
+    return {"router_decision": RouterOutput(status=status)}
 
 
 def get_tool_name_from_message(

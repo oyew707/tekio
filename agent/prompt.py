@@ -8,7 +8,7 @@ Email:   eo2233@nyu.edu
 """
 
 # Imports
-from state import BeliefState
+from .state import BeliefState
 
 # Constants
 

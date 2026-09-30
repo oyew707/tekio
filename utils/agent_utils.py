@@ -15,7 +15,7 @@ from io import BytesIO
 from typing import Dict, List, Tuple
 from PIL import Image, ImageDraw
 from langchain_core.tools import Tool
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, BaseMessage
 from .logger import get_logger
 from dataclasses import dataclass
 
@@ -256,3 +256,29 @@ async def capture_and_build_screen_message(
         ],
         additional_kwargs={"type": "observation"},
     )
+
+def contains_target_string(message: BaseMessage, target_string: str) -> bool:
+    """
+    -------------------------------------------------------
+    Checks if target_string exists within the message content, 
+    handling both list of dicts and strings.
+    -------------------------------------------------------
+    Parameters:
+       message - message to search the text content for (BaseMessage)
+       target_string - string that should be in message (str)
+    Returns:
+       Bool - True if in message False otherwise
+    -------------------------------------------------------
+    """
+    content = getattr(message, "content", "")
+    if isinstance(content, list):
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                if target_string in item.get("text", ""):
+                    logger.debug(f"Found {target_string} in {item.get('text')}")
+                    return True
+    elif isinstance(content, str):
+        if target_string in content:
+            logger.debug(f"Found {target_string} in {item.get('text')}")
+            return True
+    return False
