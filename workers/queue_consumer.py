@@ -1,6 +1,6 @@
 """
 -------------------------------------------------------
-[Program Description]
+consume messages from a RabbitMQ queue.
 -------------------------------------------------------
 Author:  Einstein Oyewole
 Email:   eo2233@nyu.edu
@@ -14,6 +14,9 @@ from rag.store import TipStore
 from dotenv import load_dotenv
 from pika import BlockingConnection, ConnectionParameters, exceptions
 from utils.logger import get_logger
+from .trajectory_extractor import parse_thoughts, outcome, format_analysis_extraction
+from .storage import consolidate_tips
+from .extract_tips import extract_structured_tips
 
 # Constants
 load_dotenv()
@@ -58,13 +61,21 @@ class QueueConsumer:
             payload = json.loads(body.decode("utf-8"))
             print(f" [x] Received message for trace_id: {payload.get('trace_id')}")
 
-            # 2. Process data
-            processed_data = [payload]
+            # 2. Trajectory Analysis
+            steps, trajectory = parse_thoughts(payload.get('trace_id'))
+            analysis = outcome(steps, trajectory)
+            
+            # 3. Extract tips
+            tips = extract_structured_tips("general", format_analysis_extraction(analysis=analysis, trajectory=trajectory))
 
-            # 3. Write to Postgres
-            rag_store.embed_and_upsert(
-                content=processed_data, metadata={}, trace_id=payload.get("trace_id")
-            )
+            # 4. Write to Postgres
+            for tip in tips:
+                rag_store.embed_and_upsert(
+                    content=tip.content, metadata=tip.model_dump(exclude={'content'}), trace_id=payload.get("trace_id")
+                )
+            
+            # 5. Consolidate the tips
+            consolidate_tips(rag_store)
 
             # Acknowledge the message to RabbitMQ
             ch.basic_ack(delivery_tag=method.delivery_tag)

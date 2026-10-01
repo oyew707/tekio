@@ -1,6 +1,7 @@
 """
 -------------------------------------------------------
-[Program Description]
+publisher utility for sending task-related messages to a 
+RabbitMQ queue.
 -------------------------------------------------------
 Author:  Einstein Oyewole
 Email:   eo2233@nyu.edu

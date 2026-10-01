@@ -1,6 +1,7 @@
 """
 -------------------------------------------------------
-[Program Description]
+Utilities for extracting and normalizing structured 
+tips from agent trajectory analyses.
 -------------------------------------------------------
 Author:  Einstein O
 Email:   eo2233@nyu.edu
@@ -20,15 +21,17 @@ load_dotenv()
 logger = get_logger(__name__, "info")
 
 
-def extract_structured_tips(thoughts, domain, analysis_text):
+def extract_structured_tips(domain, analysis_text):
     """
     -------------------------------------------------------
-    [Function Description]
+    Uses an LLM to extract structured tip information from 
+    the provided analysis text of an agent's trajectory.
     -------------------------------------------------------
     Parameters:
-       [parameter name - parameter description (parameter type and constraints)]
+       domain (str): The specific domain categorization for the tips.
+       analysis_text (str): The text containing the analysis of the agent trajectory.
     Returns:
-       [return value name - return value description (return value type)]
+       resp (List[Tips]): A dictionary representation of the extracted structured tips.
     -------------------------------------------------------
     """
     llmClient = createOpenAIClient()
@@ -42,8 +45,7 @@ def extract_structured_tips(thoughts, domain, analysis_text):
         response_format=TipList,
         temperature=0.2,
     )
-    resp = output.model_dump()
-    return resp
+    return output.tips
 
 
 def normalize_structured_tips(tip, domain, trajectory_id, outcome, description):

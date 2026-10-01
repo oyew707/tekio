@@ -1,6 +1,6 @@
 """
 -------------------------------------------------------
-[Program Description]
+Extracts and analyzes agent execution trajectories from LangSmith runs.
 -------------------------------------------------------
 Author:  Einstein O
 Email:   eo2233@nyu.edu
@@ -9,6 +9,7 @@ Email:   eo2233@nyu.edu
 
 # Imports
 import os
+from typing import Any, Dict, List, Tuple
 from dotenv import load_dotenv
 from langsmith import Client
 from utils.logger import get_logger
@@ -39,15 +40,19 @@ CLASS_MAP = {
 }
 
 
-def parse_thoughts(trajectory_id):
+def parse_thoughts(trajectory_id) -> Tuple[List[Dict, Any], List[Dict]]:
     """
     -------------------------------------------------------
-    [Function Description]
+    Parses a specific LangSmith run to extract structured reasoning 
+    steps and the raw message trajectory.
     -------------------------------------------------------
     Parameters:
-       [parameter name - parameter description (parameter type and constraints)]
+        trajectory_id (str): The unique identifier of the LangSmith run.
     Returns:
-       [return value name - return value description (return value type)]
+        steps (list[dict]): A list of structured step dictionaries containing 
+            index, type, and content.
+        trajectory (list[dict]): A chronological list of all entities/messages 
+            encountered during execution.
     -------------------------------------------------------
     """
     run = Client().read_run(trajectory_id, load_child_runs=True)
@@ -102,12 +107,17 @@ def parse_thoughts(trajectory_id):
 def outcome(steps, trajectory, domain="general"):
     """
     -------------------------------------------------------
-    [Function Description]
+    Performs a high-level qualitative analysis of a trajectory using 
+    an LLM to identify outcomes, decision chains, and failure modes.
     -------------------------------------------------------
     Parameters:
-       [parameter name - parameter description (parameter type and constraints)]
+        steps (list[dict]): The structured steps parsed from the trajectory.
+        trajectory (list[dict]): The raw message/entity trajectory.
+        domain (str): The context or domain of the task (e.g., 'coding', 'math'). 
+            Defaults to "general".
     Returns:
-       [return value name - return value description (return value type)]
+        dict: A dictionary containing the structured analysis (via 
+            TrajectoryAnalyzerOutput) and the original raw steps.
     -------------------------------------------------------
     """
     llmClient = createOpenAIClient()
@@ -126,7 +136,7 @@ def outcome(steps, trajectory, domain="general"):
     return resp
 
 
-def format_analyiss_extraction(analysis, trajectory):
+def format_analysis_extraction(analysis, trajectory):
     """
     -------------------------------------------------------
     Converts the structured analysis into a semantically rich format

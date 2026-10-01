@@ -64,6 +64,66 @@ class TipStore:
             self.logger.error(f"Failed to connect to database: {e}")
             raise
 
+    def delete_tip(self, tip_id) -> bool:
+        """
+        -------------------------------------------------------
+        Deletes a tip from the database by its ID.
+        -------------------------------------------------------
+        Parameters:
+            tip_id - The UUID of the tip to delete (str)
+        Returns:
+            success - True if a row was deleted, False otherwise (bool)
+        -------------------------------------------------------
+        """
+        self.logger.info(f"Deleting tip with id: {tip_id}")
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM tips WHERE id = %s", (tip_id,))
+                return cur.rowcount > 0
+
+    def all_tips(self, include_embedding: bool = True) -> list[dict[str, Any]]:
+        """
+        -------------------------------------------------------
+        Retrieves all tips from the database.
+        -------------------------------------------------------
+        Parameters:
+            include_embedding - Whether to include the embedding vector
+                in the results (bool)
+        Returns:
+            list[dict[str, Any]]: A list of dictionaries containing
+                tip details
+        -------------------------------------------------------
+        """
+        self.logger.info("Retrieving all tips from database")
+
+        cols = "id::text, content, metadata, trace_id, created_at"
+        if include_embedding:
+            cols += ", embedding"
+
+        query = f"SELECT {cols} FROM tips"
+
+        with self._conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+
+        result = []
+        for row in rows:
+            # Map columns dynamically based on include_embedding
+            base_data = {
+                "id": row[0],
+                "content": row[1],
+                "metadata": row[2],
+                "trace_id": row[3],
+                "created_at": row[4].isoformat() if row[4] else None,
+            }
+            if include_embedding:
+                # row[5] is the embedding vector
+                base_data["embedding"] = row[5].tolist()
+            result.append(base_data)
+
+        return result
+
     def embed_and_upsert(
         self,
         content: str,

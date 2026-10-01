@@ -1,6 +1,7 @@
 """
 -------------------------------------------------------
-[Program Description]
+the data schema and instructional prompts for the 
+Trajectory Intelligence system.
 -------------------------------------------------------
 Author:  Einstein O
 Email:   eo2233@nyu.edu
@@ -257,4 +258,9 @@ BAD tip: "Always specify full paths for binaries to avoid version conflicts."
 
 Return strict JSON with keys: trajectory_outcome, decision_attribution, tips.
 Each tip: category, priority, domain, content, purpose, trigger, steps (array of concrete actions), negative_example, tags.
+"""
+
+MERGE_TIP_PROMPT = """
+Merge these overlapping tips into ONE canonical tip that preserves ALL specific details (commands, paths, error messages). 
+The merged content field MUST be non-empty and contain the most specific/actionable version. Return strict JSON with all tip fields: category, priority, domain, content, trigger, purpose, steps, negative_example, tags.
 """
