@@ -115,7 +115,7 @@ def build_screen_message(
     parts = [
         "### Browser State",
         f"Page Title: {browser_state.title}",
-        f"Current URL: {browser_state.url}",
+        f"Current URL: {browser_state.url.split('?')[0][:100]}",
         # f"Screenshot resolution: {width}x{height}",
     ]
     if browser_state.active_element:
