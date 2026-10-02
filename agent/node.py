@@ -19,11 +19,12 @@ from langchain_core.messages import (
     ToolMessage,
     BaseMessage,
 )
+import laya
 from laya.integrations.langchain import LayaRouter
 from langchain_core.messages.utils import trim_messages
 from langsmith.run_helpers import get_current_run_tree
 from typing import List, Literal
-from agent.prompt import SYSTEM_PROMPT, ROUTER_PROMPT, format_belief_state
+from agent.prompt import SYSTEM_PROMPT, format_belief_state
 from .state import AgentState, BeliefState, BeliefUpdate
 from rag.store import TipStore
 from utils.logger import get_logger
@@ -38,6 +39,8 @@ initial_tool_call = {
     "id": f"call_{uuid.uuid4().hex[:12]}",
 }
 observation_id = f"message_{uuid.uuid4().hex[:12]}"
+local_laya_path = os.path.join(os.getcwd(), "models/laya")
+laya_model = laya.load(local_laya_path)
 router = LayaRouter(
     criteria={
         "continue": "task is ongoing, needs more steps, or tool execution is successful",
@@ -49,6 +52,7 @@ router = LayaRouter(
     confidence_threshold=0.70,
     fallback="continue",
     state_key="messages",
+    agent=laya_model,
 )
 
 

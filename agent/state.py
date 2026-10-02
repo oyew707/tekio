@@ -29,16 +29,14 @@ class BeliefUpdate(BaseModel):
     """
 
     sub_goal: Optional[str] = Field(
-        default=None,
-        description="The current specific task being worked on"
+        default=None, description="The current specific task being worked on"
     )
     action_history_summary: Optional[str] = Field(
-        default=None,
-        description="A brief summary of recent actions taken"
+        default=None, description="A brief summary of recent actions taken"
     )
     environment_hypotheses: Optional[str] = Field(
         default=None,
-        description="Current hypothesis about the state of the environment/page"
+        description="Current hypothesis about the state of the environment/page",
     )
 
 

@@ -21,7 +21,11 @@ from utils.utils import createOpenAIClient, runPrompt
 project = os.getenv("LANGCHAIN_PROJECT")
 load_dotenv()
 logger = get_logger(__name__, "info")
-router = Router()
+router = Router(
+    checkpoints={
+        "en": os.path.join(os.getcwd(), "models/laya"),
+    }
+)
 thought_classification_questions = {
     "thought_type": {
         "type": "choice",
@@ -43,15 +47,15 @@ CLASS_MAP = {
 def parse_thoughts(trajectory_id) -> Tuple[List[Dict, Any], List[Dict]]:
     """
     -------------------------------------------------------
-    Parses a specific LangSmith run to extract structured reasoning 
+    Parses a specific LangSmith run to extract structured reasoning
     steps and the raw message trajectory.
     -------------------------------------------------------
     Parameters:
         trajectory_id (str): The unique identifier of the LangSmith run.
     Returns:
-        steps (list[dict]): A list of structured step dictionaries containing 
+        steps (list[dict]): A list of structured step dictionaries containing
             index, type, and content.
-        trajectory (list[dict]): A chronological list of all entities/messages 
+        trajectory (list[dict]): A chronological list of all entities/messages
             encountered during execution.
     -------------------------------------------------------
     """
@@ -107,16 +111,16 @@ def parse_thoughts(trajectory_id) -> Tuple[List[Dict, Any], List[Dict]]:
 def outcome(steps, trajectory, domain="general"):
     """
     -------------------------------------------------------
-    Performs a high-level qualitative analysis of a trajectory using 
+    Performs a high-level qualitative analysis of a trajectory using
     an LLM to identify outcomes, decision chains, and failure modes.
     -------------------------------------------------------
     Parameters:
         steps (list[dict]): The structured steps parsed from the trajectory.
         trajectory (list[dict]): The raw message/entity trajectory.
-        domain (str): The context or domain of the task (e.g., 'coding', 'math'). 
+        domain (str): The context or domain of the task (e.g., 'coding', 'math').
             Defaults to "general".
     Returns:
-        dict: A dictionary containing the structured analysis (via 
+        dict: A dictionary containing the structured analysis (via
             TrajectoryAnalyzerOutput) and the original raw steps.
     -------------------------------------------------------
     """

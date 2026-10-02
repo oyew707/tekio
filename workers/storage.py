@@ -25,8 +25,8 @@ SIMILARITY_THRESHOLD = 0.85
 def consolidate_tips(store):
     """
     -------------------------------------------------------
-    Accepts new tips and adds them to exisitng tips store by fethcing all 
-    tips, clusters them to find semantic duplicates, merges them, and 
+    Accepts new tips and adds them to exisitng tips store by fethcing all
+    tips, clusters them to find semantic duplicates, merges them, and
     updates the database.
     -------------------------------------------------------
     Parameters:
@@ -34,7 +34,7 @@ def consolidate_tips(store):
     -------------------------------------------------------
     """
     logger.info("Starting consolidation process")
-        
+
     # 1. Get all tips with embeddings
     tips_data = store.all_tips(include_embedding=True)
     if not tips_data:
@@ -42,17 +42,17 @@ def consolidate_tips(store):
         return
 
     clusters = cluster_tips(tips_data)
-    
+
     for group in clusters:
         if len(group) < 2:
             continue
-            
+
         logger.info(f"Merging cluster of size {len(group)}")
-        
+
         merged_tip_dict = merge_tips(group)
         new_content = merged_tip_dict["content"]
         new_metadata = {k: v for k, v in merged_tip_dict.items() if k != "content"}
-        
+
         all_trace_ids = []
         for t in group:
             tid = t.get("trace_id")
@@ -63,13 +63,12 @@ def consolidate_tips(store):
 
         for old_tip in group:
             store.delete_tip(old_tip["id"])
-            
+
         store.embed_and_upsert(
-            content=new_content,
-            metadata=new_metadata,
-            trace_id=unique_trace_ids
+            content=new_content, metadata=new_metadata, trace_id=unique_trace_ids
         )
         logger.info("Consolidation of cluster complete.")
+
 
 def cluster_tips(tips: list[dict[str, Any]]):
     """
@@ -79,7 +78,7 @@ def cluster_tips(tips: list[dict[str, Any]]):
     Parameters:
        tips - tips to be clusters (list[dict[str, Any]])
     Returns:
-       list[list[dict]]: A list of clusters, where each cluster 
+       list[list[dict]]: A list of clusters, where each cluster
             is a list of tip dictionaries.
     -------------------------------------------------------
     """
@@ -87,17 +86,18 @@ def cluster_tips(tips: list[dict[str, Any]]):
     df = pd.DataFrame(tips)
     X = df["embedding"].to_numpy()
     clustering = AgglomerativeClustering(
-        metric="cosine", linkage="complete", distance_threshold=1 - SIMILARITY_THRESHOLD,
-        compute_full_tree=True
+        metric="cosine",
+        linkage="complete",
+        distance_threshold=1 - SIMILARITY_THRESHOLD,
+        compute_full_tree=True,
     ).fit(X)
-    
+
     df["cluster"] = clustering.labels_
     grouped = df.groupby("cluster")
     return grouped
 
-    
-    
-def merge_tips(tips) -> Tip :
+
+def merge_tips(tips) -> Tip:
     """
     -------------------------------------------------------
     Uses an LLM to merge multiple tips into one.

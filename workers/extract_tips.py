@@ -1,6 +1,6 @@
 """
 -------------------------------------------------------
-Utilities for extracting and normalizing structured 
+Utilities for extracting and normalizing structured
 tips from agent trajectory analyses.
 -------------------------------------------------------
 Author:  Einstein O
@@ -24,7 +24,7 @@ logger = get_logger(__name__, "info")
 def extract_structured_tips(domain, analysis_text):
     """
     -------------------------------------------------------
-    Uses an LLM to extract structured tip information from 
+    Uses an LLM to extract structured tip information from
     the provided analysis text of an agent's trajectory.
     -------------------------------------------------------
     Parameters:

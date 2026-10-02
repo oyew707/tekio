@@ -62,18 +62,23 @@ class QueueConsumer:
             print(f" [x] Received message for trace_id: {payload.get('trace_id')}")
 
             # 2. Trajectory Analysis
-            steps, trajectory = parse_thoughts(payload.get('trace_id'))
+            steps, trajectory = parse_thoughts(payload.get("trace_id"))
             analysis = outcome(steps, trajectory)
-            
+
             # 3. Extract tips
-            tips = extract_structured_tips("general", format_analysis_extraction(analysis=analysis, trajectory=trajectory))
+            tips = extract_structured_tips(
+                "general",
+                format_analysis_extraction(analysis=analysis, trajectory=trajectory),
+            )
 
             # 4. Write to Postgres
             for tip in tips:
                 rag_store.embed_and_upsert(
-                    content=tip.content, metadata=tip.model_dump(exclude={'content'}), trace_id=payload.get("trace_id")
+                    content=tip.content,
+                    metadata=tip.model_dump(exclude={"content"}),
+                    trace_id=payload.get("trace_id"),
                 )
-            
+
             # 5. Consolidate the tips
             consolidate_tips(rag_store)
 

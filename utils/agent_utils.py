@@ -257,10 +257,11 @@ async def capture_and_build_screen_message(
         additional_kwargs={"type": "observation"},
     )
 
+
 def contains_target_string(message: BaseMessage, target_string: str) -> bool:
     """
     -------------------------------------------------------
-    Checks if target_string exists within the message content, 
+    Checks if target_string exists within the message content,
     handling both list of dicts and strings.
     -------------------------------------------------------
     Parameters:

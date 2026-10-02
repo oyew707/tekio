@@ -1,6 +1,6 @@
 """
 -------------------------------------------------------
-the data schema and instructional prompts for the 
+the data schema and instructional prompts for the
 Trajectory Intelligence system.
 -------------------------------------------------------
 Author:  Einstein O

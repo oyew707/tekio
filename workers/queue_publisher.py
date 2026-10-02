@@ -1,6 +1,6 @@
 """
 -------------------------------------------------------
-publisher utility for sending task-related messages to a 
+publisher utility for sending task-related messages to a
 RabbitMQ queue.
 -------------------------------------------------------
 Author:  Einstein Oyewole
