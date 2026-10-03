@@ -57,20 +57,27 @@ def runPrompt(
     -------------------------------------------------------
     """
     try:
-        response = client.responses.parse(
+        response = client.chat.completions.create(
             model=os.getenv("EXTRACTION_MODEL", "gemma4-opus"),
-            instructions=system_prompt,
-            input=messages,
-            text_format=response_format,
-            reasoning={"effort": "medium"},
+            messages=[
+                {"role": "system", "content": system_prompt},
+            ]
+            + messages,
+            reasoning_effort="low",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "math_response",
+                    "schema": response_format.model_json_schema(),
+                    "strict": False,
+                },
+            },
             temperature=temperature,
         )
-        reasoning = response.step_by_step_thinking
-        logger.info(f"Reasoning output of llm call: {reasoning}")
-        conlusion = response.final_conclusion
-        logger.info(f"Conclusion of llm call: {conlusion}")
-        output = response.output_parsed
+        raw_json_string = response.choices[0].message.content
+        parsed_data = response_format.model_validate_json(raw_json_string)
+        logger.debug(f"response: {str(raw_json_string)}")
+        return parsed_data
     except Exception as e:
         logger.error(f"An error occurred while running prompt: {e}", exc_info=True)
         return None
-    return output

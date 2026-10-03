@@ -83,7 +83,8 @@ def cluster_tips(tips: list[dict[str, Any]]):
     """
     logger.info("Clustering Tips")
     df = pd.DataFrame(tips)
-    X = df["embedding"].to_numpy()
+    X = df["embedding"]
+
     clustering = AgglomerativeClustering(
         metric="cosine",
         linkage="complete",
@@ -111,10 +112,12 @@ def merge_tips(tips) -> Tip:
     llmClient = createOpenAIClient()
     output: Tip = runPrompt(
         llmClient,
-        {
-            "role": "user",
-            "content": json.dumps(tips),
-        },
+        [
+            {
+                "role": "user",
+                "content": json.dumps(tips),
+            }
+        ],
         system_prompt=MERGE_TIP_PROMPT,
         response_format=Tip,
         temperature=0.1,

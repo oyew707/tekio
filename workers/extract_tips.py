@@ -34,17 +34,21 @@ def extract_structured_tips(domain, analysis_text):
        resp (List[Tips]): A dictionary representation of the extracted structured tips.
     -------------------------------------------------------
     """
+    logger.info(f"Extracting Structured Tips for domain: {domain}")
     llmClient = createOpenAIClient()
     output: TipList = runPrompt(
         llmClient,
-        {
-            "role": "user",
-            "content": f"Target Domain: {domain}\n\nAgent trajectory Analysis:\n{str(analysis_text)}",
-        },
+        [
+            {
+                "role": "user",
+                "content": f"Target Domain: {domain}\n\nAgent trajectory Analysis:\n{str(analysis_text)}",
+            }
+        ],
         system_prompt=TIP_EXTRACTION_PROMPT,
         response_format=TipList,
         temperature=0.2,
     )
+    logger.info(f"Tip Extraction Complete")
     return output.tips
 
 

@@ -28,7 +28,9 @@ class ThoughtClassification(BaseModel):
     -------------------------------------------------------
     """
 
-    step: int
+    step: int = Field(
+        description="The sequential step number where this thought occurred."
+    )
     type: Literal[
         "analytical",
         "planning",
@@ -36,9 +38,15 @@ class ThoughtClassification(BaseModel):
         "reflection",
         "self_correction",
         "error_recognition",
-    ]
-    summary: str  # <1-line summary of this thought>
-    quality: Literal["positive", "negative", "neutral"]
+    ] = Field(
+        description="The classification of the thought (e.g., planning, reflection)."
+    )
+    summary: str = Field(
+        description="A brief, one-line summary of the thought content."
+    )
+    quality: Literal["positive", "negative", "neutral"] = Field(
+        description="Assessment of the thought's quality (positive, negative, neutral)."
+    )
 
 
 class DecisionChain(BaseModel):
@@ -55,16 +63,22 @@ class DecisionChain(BaseModel):
     -------------------------------------------------------
     """
 
-    step: int
-    decision: str
-    consequence: str
+    step: int = Field(
+        description="The sequential step number where the decision was made."
+    )
+    decision: str = Field(
+        description="A description of the specific action or decision taken."
+    )
+    consequence: str = Field(
+        description="The outcome or result that followed this decision."
+    )
     causal_role: Literal[
         "root_cause",
         "proximate_cause",
         "contributing_factor",
         "successful_decision",
         "recovery_decision",
-    ]
+    ] = Field(description="The role this decision played in the overall process flow.")
 
 
 class SubtaskPhase(BaseModel):
@@ -81,10 +95,18 @@ class SubtaskPhase(BaseModel):
     -------------------------------------------------------
     """
 
-    phase: str
-    steps: List[int]
-    outcome: Literal["success", "partial", "failure"]
-    transferable_pattern: str
+    phase: str = Field(
+        description="The name of the phase (e.g., 'authentication', 'data_retrieval')."
+    )
+    steps: List[int] = Field(
+        description="A list of all sequential steps belonging to this phase."
+    )
+    outcome: Literal["success", "partial", "failure"] = Field(
+        description="The final outcome of the phase (success, partial, or failure)."
+    )
+    transferable_pattern: str = Field(
+        description="A generic description of what worked or failed that could be abstracted from specifics."
+    )
 
 
 class FailureChain(BaseModel):
@@ -102,11 +124,21 @@ class FailureChain(BaseModel):
     -------------------------------------------------------
     """
 
-    symptom_step: int
-    root_cause_step: int
-    root_cause: str
-    recovery_step: Optional[int]
-    recovery_method: Optional[str]
+    symptom_step: int = Field(
+        description="The step number where the failure first became apparent."
+    )
+    root_cause_step: int = Field(
+        description="The step number where the critical/bad decision leading to failure was made."
+    )
+    root_cause: str = Field(
+        description="A specific description of the underlying cause of the failure."
+    )
+    recovery_step: Optional[int] = Field(
+        description="The step number where recovery actions took place, or null if no recovery occurred."
+    )
+    recovery_method: Optional[str] = Field(
+        description="The specific method used to recover, or null if none was used."
+    )
 
 
 class EfficiencyIssue(BaseModel):
@@ -121,9 +153,15 @@ class EfficiencyIssue(BaseModel):
     -------------------------------------------------------
     """
 
-    steps: List[int]
-    issue: str
-    better_approach: str
+    steps: List[int] = Field(
+        description="A list of step numbers involved in the inefficiency."
+    )
+    issue: str = Field(
+        description="A description of what aspect was inefficient (e.g., redundant checks, overly broad search)."
+    )
+    better_approach: str = Field(
+        description="A recommendation for how the action should have been handled differently."
+    )
 
 
 class TrajectoryAnalyzerOutput(BaseModel):
@@ -141,27 +179,40 @@ class TrajectoryAnalyzerOutput(BaseModel):
     -------------------------------------------------------
     """
 
-    outcome: Literal["clean_success", "inefficient_success", "recovery", "failure"]
-    thought_classification: List[ThoughtClassification]
-    decision_chain: List[DecisionChain]
-    subtask_phases: List[SubtaskPhase]
-    failure_chains: List[FailureChain]
-    efficiency_issues: List[EfficiencyIssue]
+    outcome: Literal["clean_success", "inefficient_success", "recovery", "failure"] = (
+        Field(
+            description="The final assessment of the overall process (success, failure, recovery)."
+        )
+    )
+    thought_classification: List[ThoughtClassification] = Field(
+        description="A chronological list of all recorded thoughts and their types."
+    )
+    decision_chain: List[DecisionChain] = Field(
+        description="A record of the key decisions made and their immediate consequences."
+    )
+    subtask_phases: List[SubtaskPhase] = Field(
+        description="An overview of the major operational phases executed."
+    )
+    failure_chains: List[FailureChain] = Field(
+        description="A detailed breakdown of any detected failure events and their origins."
+    )
+    efficiency_issues: List[EfficiencyIssue] = Field(
+        description="A list of areas where process optimization is possible."
+    )
 
 
 TRAJECTORY_ANALYSIS_PROMPT = """
 You are a trajectory intelligence analyzer for AI agent execution logs.
 
-Your job is to produce a STRUCTURED INTERMEDIATE REPRESENTATION of an agent's execution, NOT tips
+Your job is to produce a STRUCTURED REPRESENTATION of an agent's execution
 
 RULES:
 - Be SPECIFIC: reference actual commands, files, errors from the text
-- thought_classification should cover the 5-8 most important reasoning moments, not every line
-- decision_chain should trace the critical path (max 6-8 entries)
+- thought_classification should cover the most important reasoning moments, not every line
+- decision_chain should trace the critical path
 - failure_chains: trace symptoms back to ROOT CAUSES (which may be many steps earlier)
 - subtask_phases: abstract the phase names so they transfer across different tasks
-- If the trajectory is a memory/narrative file rather than raw agent log, still identify decisions and their consequences
-- Output ONLY valid JSON`
+- Output ONLY valid JSON
 """
 
 
@@ -184,15 +235,25 @@ class Tip(BaseModel):
     -------------------------------------------------------
     """
 
-    category: Literal["strategy", "recovery", "optimization"] = "strategy"
-    priority: Literal["critical", "high", "medium", "low"] = "medium"
-    tags: List[str] = []
-    domain: str
-    content: str
-    purpose: str
-    trigger: str
-    steps: List[str]
-    negative_example: Optional[str]
+    category: Literal["strategy", "recovery", "optimization"] = Field(
+        "strategy", description="A categorization of the tip."
+    )
+    priority: Literal["critical", "high", "medium", "low"] = Field(
+        "medium", description="The priority level assigned to this tip."
+    )
+    tags: List[str] = Field(
+        default_factory=list, description="A list of tags associated with the tip."
+    )
+    domain: str = Field(description="The specific domain or area this tip applies to.")
+    content: str = Field(description="The core recommendation or solution description.")
+    purpose: str = Field(description="Why this tip is being provided (the goal).")
+    trigger: str = Field(
+        description="The condition or specific error that activates this tip."
+    )
+    steps: List[str] = Field(description="The actionable, ordered steps to follow.")
+    negative_example: Optional[str] = Field(
+        None, description="A specific scenario where *not* following this tip fails."
+    )
 
 
 class TipList(BaseModel):

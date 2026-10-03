@@ -10,6 +10,7 @@ Email:   eo2233@nyu.edu
 # Imports
 import os
 from typing import Any, List
+import json
 import psycopg
 from langchain_openai import OpenAIEmbeddings
 from utils.logger import get_logger
@@ -119,7 +120,7 @@ class TipStore:
             }
             if include_embedding:
                 # row[5] is the embedding vector
-                base_data["embedding"] = row[5].tolist()
+                base_data["embedding"] = json.loads(row[5])
             result.append(base_data)
 
         return result

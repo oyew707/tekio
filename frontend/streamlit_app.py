@@ -69,6 +69,7 @@ CONFIG = {
 }
 MAX_RETRIES = 3
 
+
 @dataclass
 class SharedState:
     """
@@ -76,6 +77,7 @@ class SharedState:
     Thread-safe container for background updates.
     -------------------------------------------------------
     """
+
     frame: bytes = None
     lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -86,7 +88,7 @@ class SharedState:
     def get_frame(self):
         with self.lock:
             return self.frame
-    
+
     def set_watching(self, value: bool):
         with self.lock:
             self.watching = value
@@ -94,7 +96,6 @@ class SharedState:
     def is_watching(self) -> bool:
         with self.lock:
             return self.watching
-
 
 
 def setup_state():
@@ -107,7 +108,7 @@ def setup_state():
     for k, v in DEFAULT_STATE.items():
         if k not in st.session_state:
             st.session_state[k] = v
-        
+
     if "shared_state" not in st.session_state:
         st.session_state.shared_state = SharedState()
 
@@ -151,9 +152,7 @@ async def _watch_loop():
             while shared_state.is_watching():
                 try:
                     page = await _find_agent_page(browser)
-                    frame = await page.screenshot(
-                        type="jpeg", quality=60
-                    )
+                    frame = await page.screenshot(type="jpeg", quality=60)
                     shared_state.update_frame(frame)
                     logger.debug("Captured browser frame")
                     await asyncio.sleep(0.1)

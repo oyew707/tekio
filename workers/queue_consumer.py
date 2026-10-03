@@ -12,7 +12,7 @@ import json
 import os
 from rag.store import TipStore
 from dotenv import load_dotenv
-from pika import BlockingConnection, ConnectionParameters, exceptions, URLParameters
+from pika import BlockingConnection, exceptions, URLParameters
 from utils.logger import get_logger
 from .trajectory_extractor import parse_thoughts, outcome, format_analysis_extraction
 from .storage import consolidate_tips
@@ -65,7 +65,7 @@ class QueueConsumer:
 
             # 2. Trajectory Analysis
             steps, trajectory = parse_thoughts(payload.get("trace_id"))
-            analysis = outcome(steps, trajectory)
+            analysis = outcome(steps)
 
             # 3. Extract tips
             tips = extract_structured_tips(
