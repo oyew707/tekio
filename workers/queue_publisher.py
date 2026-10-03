@@ -38,7 +38,9 @@ class TrajectoryQueuePublisher:
             queue_name - The name of the RabbitMQ queue to publish to. (str)
         -------------------------------------------------------
         """
-        self.url = url or os.environ["RABBITMQ_URL"]
+        self.url = url or os.environ.get("RABBITMQ_URL")
+        if not self.url:
+            raise ValueError("RABBITMQ_URL environment variable must be set.")
         self.queue_name = queue_name
 
     def publish(

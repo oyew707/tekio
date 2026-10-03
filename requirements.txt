@@ -19,3 +19,4 @@ laya[langchain]
 torch
 torchvision
 mcp
+scikit-learn

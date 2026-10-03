@@ -12,7 +12,7 @@ import json
 import os
 from rag.store import TipStore
 from dotenv import load_dotenv
-from pika import BlockingConnection, ConnectionParameters, exceptions
+from pika import BlockingConnection, ConnectionParameters, exceptions, URLParameters
 from utils.logger import get_logger
 from .trajectory_extractor import parse_thoughts, outcome, format_analysis_extraction
 from .storage import consolidate_tips
@@ -59,7 +59,9 @@ class QueueConsumer:
         try:
             # 1. Decode the message
             payload = json.loads(body.decode("utf-8"))
-            print(f" [x] Received message for trace_id: {payload.get('trace_id')}")
+            logger.info(
+                f" [x] Received message for trace_id: {payload.get('trace_id')}"
+            )
 
             # 2. Trajectory Analysis
             steps, trajectory = parse_thoughts(payload.get("trace_id"))
@@ -86,10 +88,10 @@ class QueueConsumer:
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
         except json.JSONDecodeError:
-            print(f" [!] Error decoding JSON: {body}")
+            logger.error(f" [!] Error decoding JSON: {body}")
             ch.basic_nack(delivery_tag=method.delivery_tag)  # Reject bad messages
         except Exception as e:
-            print(f" [!] An error occurred during message processing: {e}")
+            logger.error(f" [!] An error occurred during message processing: {e}")
             ch.basic_nack(
                 delivery_tag=method.delivery_tag
             )  # Reject and potentially re-queue
@@ -101,19 +103,18 @@ class QueueConsumer:
         -------------------------------------------------------
         """
         if not self.rabbitmq_url:
-            print("Error: RABBITMQ_URL environment variable not set.")
+            logger.warning("Error: RABBITMQ_URL environment variable not set.")
             return
 
         try:
-            connection = BlockingConnection(
-                ConnectionParameters(host=self.rabbitmq_url)
-            )
+            logger.info(f"Beginning to consume {self.rabbitmq_url}")
+            connection = BlockingConnection(URLParameters(self.rabbitmq_url))
             channel = connection.channel()
 
             # Declare the queue, ensuring it exists and is durable
             channel.queue_declare(queue=QUEUE_NAME, durable=True)
 
-            print(
+            logger.info(
                 f" [*] Waiting for messages on queue '{QUEUE_NAME}'. To exit press CTRL+C"
             )
 
@@ -125,10 +126,11 @@ class QueueConsumer:
             channel.start_consuming()
 
         except exceptions.AMQPConnectionError as e:
-            print(f"Failed to connect to RabbitMQ: {e}")
+            logger.error(f"Failed to connect to RabbitMQ: {e}")
         except KeyboardInterrupt:
-            print("Consumer shutting down...")
+            logger.info("Consumer shutting down...")
         finally:
+            logger.info("Closing Connection")
             if "connection" in locals() and connection.is_open:
                 connection.close()
 

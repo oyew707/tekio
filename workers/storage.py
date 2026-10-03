@@ -13,7 +13,6 @@ from typing import Any, List
 from utils.logger import get_logger
 import pandas as pd
 from utils.utils import createOpenAIClient, runPrompt
-from workers.extract_tips import normalize_structured_tips
 from .prompts import Tip, MERGE_TIP_PROMPT
 from sklearn.cluster import AgglomerativeClustering
 

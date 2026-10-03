@@ -8,6 +8,7 @@ Email:   eo2233@nyu.edu
 """
 
 # Imports
+from dataclasses import dataclass, field
 from dotenv import load_dotenv
 import os
 import threading
@@ -68,6 +69,33 @@ CONFIG = {
 }
 MAX_RETRIES = 3
 
+@dataclass
+class SharedState:
+    """
+    -------------------------------------------------------
+    Thread-safe container for background updates.
+    -------------------------------------------------------
+    """
+    frame: bytes = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def update_frame(self, new_frame):
+        with self.lock:
+            self.frame = new_frame
+
+    def get_frame(self):
+        with self.lock:
+            return self.frame
+    
+    def set_watching(self, value: bool):
+        with self.lock:
+            self.watching = value
+
+    def is_watching(self) -> bool:
+        with self.lock:
+            return self.watching
+
+
 
 def setup_state():
     """
@@ -79,6 +107,9 @@ def setup_state():
     for k, v in DEFAULT_STATE.items():
         if k not in st.session_state:
             st.session_state[k] = v
+        
+    if "shared_state" not in st.session_state:
+        st.session_state.shared_state = SharedState()
 
 
 async def _find_agent_page(browser):
@@ -112,17 +143,18 @@ async def _watch_loop():
     -------------------------------------------------------
     """
     logger.info(f"Starting CDP watch loop on {CDP_ENDPOINT}")
+    shared_state = st.session_state.shared_state
     try:
         async with async_playwright() as p:
             browser = await p.chromium.connect_over_cdp(CDP_ENDPOINT)
-            st.session_state.watching = True
             logger.debug("Browser connected via CDP")
-            while st.session_state.watching:
+            while shared_state.is_watching():
                 try:
                     page = await _find_agent_page(browser)
-                    st.session_state.frame = await page.screenshot(
+                    frame = await page.screenshot(
                         type="jpeg", quality=60
                     )
+                    shared_state.update_frame(frame)
                     logger.debug("Captured browser frame")
                     await asyncio.sleep(0.1)
                 except Exception as e:
@@ -130,9 +162,11 @@ async def _watch_loop():
                     break
             await browser.close()
             logger.debug("Browser closed")
+    except Exception as e:
+        logger.error(f"Fatal error in _watch_loop: {e}")
     finally:
         logger.info("Stopping CDP watch loop")
-        st.session_state.watching = False
+        shared_state.set_watching(False)
 
 
 def start_watching():
@@ -148,6 +182,8 @@ def start_watching():
     def thread_wrapper():
         asyncio.run(_watch_loop())
 
+    st.session_state.watching = True
+    st.session_state.shared_state.set_watching(True)
     thread = threading.Thread(target=thread_wrapper, daemon=True)
     add_script_run_ctx(thread)
     thread.start()
@@ -161,6 +197,7 @@ def stop_watching():
     """
     logger.info("Stopping background watcher")
     st.session_state.watching = False
+    st.session_state.shared_state.set_watching(False)
 
 
 def main():
@@ -274,7 +311,7 @@ def main():
             # Process the prompt
             try:
                 final_state = asyncio.run(run(agent_state=agent_state))
-                response_text = final_state.get("message")[-1].content
+                response_text = final_state.get("messages")[-1].content
                 logger.info(f"Agent router decision: {response_text}")
                 st.chat_message("assistant").write(response_text)
                 st.session_state.history.add_ai_message(response_text)
@@ -300,8 +337,9 @@ def main():
 
         @st.fragment(run_every=0.15)
         def live_view():
-            if st.session_state.frame:
-                st.image(st.session_state.frame, width="stretch")
+            frame = st.session_state.shared_state.get_frame()
+            if frame:
+                st.image(frame, width="stretch")
             elif st.session_state.watching:
                 st.write("Connecting...")
             else:

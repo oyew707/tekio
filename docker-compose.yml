@@ -76,6 +76,7 @@ services:
 
   queue_consumer:
     image: python:3.11-slim
+    working_dir: /workspace
     volumes:
       - ./:/workspace
     depends_on:
@@ -83,7 +84,9 @@ services:
       - rabbitmq
     env_file:
       - .env
-    command: sh -c "pip install pika psycopg2-binary && python workers/queue_consumer.py"
+    environment:
+      - PYTHONPATH=/workspace
+    command: sh -c "pip install -r requirements.txt --upgrade  && python -m workers.queue_consumer"
     restart: unless-stopped
 
 volumes:

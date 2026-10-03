@@ -11,9 +11,8 @@ Email:   eo2233@nyu.edu
 
 # Imports
 import os
-import asyncio
-import re
-from typing import List, Tuple
+import string
+from typing import List, Literal, Tuple
 from langchain_core.tools import ToolException, StructuredTool
 from utils.logger import get_logger
 from urllib.parse import quote_plus
@@ -23,7 +22,7 @@ from utils.agent_utils import get_browser_state, BrowserState
 # Constants
 load_dotenv()
 logger = get_logger(__name__, "debug")
-
+ALPHA_NUM = string.digits + string.ascii_lowercase
 CUA_KEY_TO_PLAYWRIGHT_KEY = {
     "/": "Divide",
     "\\": "Backslash",
@@ -52,10 +51,63 @@ CUA_KEY_TO_PLAYWRIGHT_KEY = {
     "pageup": "PageUp",
     "shift": "Shift",
     "space": " ",
-    "super": "Meta",
+    "super": "Super",
     "tab": "Tab",
     "win": "Meta",
 }
+# https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values
+VALID_KEYBOARD_KEYS = (
+    list(CUA_KEY_TO_PLAYWRIGHT_KEY.values())
+    + [
+        "AltGraph",
+        "Fn",
+        "FnLock",
+        "Hyper",
+        "NumLock",
+        "ScrollLock",
+        "Symbol",
+        "SymbolLock",
+        "Clear",
+        "Copy",
+        "CrSel",
+        "Cut",
+        "EraseEof",
+        "ExSel",
+        "Paste",
+        "Redo",
+        "Undo",
+        "Pause",
+        "Play",
+        "Select",
+        "ZoomIn",
+        "ZoomOut",
+        "PrintScreen",
+        "F1",
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F6",
+        "F7",
+        "F8",
+        "F9",
+        "F10",
+        "F11",
+        "F12",
+        "BrowserBack",
+        "BrowserFavorites",
+        "BrowserForward",
+        "BrowserRefresh",
+        "BrowserStop",
+        "Decimal",
+        "Multiply",
+        "Add",
+        "Divide",
+        "Subtract",
+        "Separator",
+    ]
+    + list(ALPHA_NUM)
+)
 
 
 class BrowserTools:
@@ -173,7 +225,7 @@ class BrowserTools:
         self.logger.info(f"Right click completed at ({tgt_x}, {tgt_y}).")
         return f"I right-clicked at coordinates ({tgt_x}, {tgt_y})."
 
-    async def key(self, keys: List = []):
+    async def key(self, keys: list[str] = []):
         """
         -------------------------------------------------------
         Performs key down presses on the arguments passed in order, then
@@ -185,21 +237,26 @@ class BrowserTools:
             tool response
         -------------------------------------------------------
         """
-        pressed = []
+
+        def _normalize_keys(keys: list[str]) -> frozenset:
+            mapped = [CUA_KEY_TO_PLAYWRIGHT_KEY.get(k.lower(), k) for k in keys]
+            valid_keys = [k if len(k) > 1 else k.lower() for k in mapped]
+            assert all(
+                map(lambda k: k in VALID_KEYBOARD_KEYS, valid_keys)
+            ), f"Found some invalid Keys in input. These are the valid keys {VALID_KEYBOARD_KEYS}"
+            return valid_keys
+
+        normalized_keys = _normalize_keys(keys)
+        key = "+".join(normalized_keys)
         try:
-            for key in keys:
-                assert (
-                    key in CUA_KEY_TO_PLAYWRIGHT_KEY.keys()
-                ), f"{key} is not valid, Use one of the following keys: { CUA_KEY_TO_PLAYWRIGHT_KEY.keys()}"
-                playwright_key = CUA_KEY_TO_PLAYWRIGHT_KEY[key]
-                resp = await self.tools_map["browser_press_key"].ainvoke(
-                    {"key": playwright_key}
-                )
-                self.logger.debug(f"Response after pressing {key}: {str(resp)}")
-                pressed.append(key)
+            resp = await self.tools_map["browser_press_key"].ainvoke({"key": key})
+            self.logger.debug(f"Response after pressing {key}: {str(resp)}")
+        except AssertionError as e:
+            logger.error(f"Received an assertion error {str(e)}")
+            return str(e)
         except Exception as e:
-            logger.error(f"Could not press the following keys {keys[len(pressed):]}")
-        return f"I pressed the following keys: {pressed}"
+            logger.error(f"Could not press the following keys {keys[len(key):]}")
+        return f"I pressed the following keys: {key}"
 
     async def mouse_move(self, coordinates: tuple[int, int]):
         """
@@ -277,7 +334,7 @@ class BrowserTools:
     async def scroll(self, pixels: int = 0) -> str:
         """
         -------------------------------------------------------
-        Performs a scroll of the mouse scroll wheel.
+        Performs a Vertical scroll of the mouse scroll wheel.
         -------------------------------------------------------
         Parameters:
             pixels - The amount of scrolling to perform. Positive values
@@ -290,7 +347,7 @@ class BrowserTools:
         delta = int(pixels * self.viewport_height / self.DISPLAY_SIZE)
         try:
             response = await self.tools_map["browser_mouse_wheel"].ainvoke(
-                {"deltaX": delta, "deltaY": 0}
+                {"deltaX": 0, "deltaY": -1 * delta}
             )
             self.logger.debug(f"Browser wheel response: {response}")
             if len(response) > 0 and "### Error" in response[0].get("text", ""):
@@ -308,8 +365,8 @@ class BrowserTools:
         Performs a horizontal scroll (mapped to regular scroll).
         -------------------------------------------------------
         Parameters:
-            pixels - The amount of scrolling to perform. Positive values scroll up,
-                negative values scroll down. (int)
+            pixels - The amount of scrolling to perform. Positive values scroll left,
+                negative values scroll right. (int)
         Returns:
             tool response
         -------------------------------------------------------
@@ -318,7 +375,7 @@ class BrowserTools:
         delta = int(pixels * self.viewport_width / self.DISPLAY_SIZE)
         try:
             response = await self.tools_map["browser_mouse_wheel"].ainvoke(
-                {"deltaX": 0, "deltaY": delta}
+                {"deltaX": -1 * delta, "deltaY": 0}
             )
             self.logger.debug(f"Browser wheel response: {response}")
             if len(response) > 0 and "### Error" in response[0].get("text", ""):
@@ -607,6 +664,7 @@ class BrowserTools:
             "ask_user_question",
             "wait",
             "pause_and_memorize_fact",
+            "terminate",
         ]
 
         return [

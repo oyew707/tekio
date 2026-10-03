@@ -13,20 +13,15 @@ from typing import Any, Dict, List, Tuple
 from dotenv import load_dotenv
 from langsmith import Client
 from utils.logger import get_logger
-from laya import Router
-from prompts import TRAJECTORY_ANALYSIS_PROMPT, TrajectoryAnalyzerOutput
+import laya
+from .prompts import TRAJECTORY_ANALYSIS_PROMPT, TrajectoryAnalyzerOutput
 from utils.utils import createOpenAIClient, runPrompt
 
 # Constants
 project = os.getenv("LANGCHAIN_PROJECT")
 load_dotenv()
 logger = get_logger(__name__, "info")
-router = Router(
-    checkpoints={
-        "en": os.path.join(os.getcwd(), "models/laya"),
-    },
-    preload=True,
-)
+router = laya.load(os.path.join(os.getcwd(), "models/laya"))
 thought_classification_questions = {
     "thought_type": {
         "type": "choice",
@@ -45,7 +40,7 @@ CLASS_MAP = {
 }
 
 
-def parse_thoughts(trajectory_id) -> Tuple[List[Dict, Any], List[Dict]]:
+def parse_thoughts(trajectory_id) -> Tuple[List[Dict[str, Any]], List[Dict]]:
     """
     -------------------------------------------------------
     Parses a specific LangSmith run to extract structured reasoning
@@ -60,12 +55,14 @@ def parse_thoughts(trajectory_id) -> Tuple[List[Dict, Any], List[Dict]]:
             encountered during execution.
     -------------------------------------------------------
     """
+    logger.info(f"Parsing trajectory run: {trajectory_id}")
     run = Client().read_run(trajectory_id, load_child_runs=True)
 
     steps = []
     trajectory = []
     for idx, child in enumerate(run.child_runs, 1):
         if err := getattr(child, "error", None):
+            logger.debug(f"Child run {idx} has error: {err}")
             steps.append({"index": idx, "type": "error", "content": str(err)})
             continue
 
@@ -86,6 +83,7 @@ def parse_thoughts(trajectory_id) -> Tuple[List[Dict, Any], List[Dict]]:
                 try:
                     res = router.predict(m_reasoning, thought_classification_questions)
                     step_type = CLASS_MAP[res["answers"]["thought_type"]["choice"]]
+                    logger.info(f"Step {idx}: Classified as {step_type}")
                     break  # Stop processing further messages for this child run
                 except Exception as e:
                     logger.warning(
@@ -105,6 +103,7 @@ def parse_thoughts(trajectory_id) -> Tuple[List[Dict, Any], List[Dict]]:
                     "content": "\n".join(content_parts).strip(),
                 }
             )
+    logger.info(f"Parsed {len(steps)} steps and {len(trajectory)} trajectory entries")
 
     return steps, trajectory
 
@@ -125,6 +124,7 @@ def outcome(steps, trajectory, domain="general"):
             TrajectoryAnalyzerOutput) and the original raw steps.
     -------------------------------------------------------
     """
+    logger.info(f"Performing outcome analysis for domain: {domain}")
     llmClient = createOpenAIClient()
     output: TrajectoryAnalyzerOutput = runPrompt(
         llmClient,
@@ -138,6 +138,7 @@ def outcome(steps, trajectory, domain="general"):
     )
     resp = output.model_dump()
     resp["raw_steps"] = steps
+    logger.info("Outcome analysis complete")
     return resp
 
 
@@ -154,16 +155,19 @@ def format_analysis_extraction(analysis, trajectory):
        formatted_string (str) - The formatted context string.
     -------------------------------------------------------
     """
+    logger.info(f"Formatting analysis extraction")
 
     sections = []
     sections.append(f"## Trajectory Outcome: {analysis.outcome or 'unknown'}")
 
     if analysis.thought_classification:
+        logger.info("Including thought classification")
         sections.append("\n## Agent Reasoning Classification")
         for t in analysis.thought_classification:
             sections.append(f"- Step {t.step} [{t.type}] ({t.quality}): {t.summary}")
 
     if analysis.decision_chain:
+        logger.info("Including decision chain")
         sections.append("\n## Critical Decision Chain")
         for d in analysis.decision_chain:
             sections.append(
@@ -171,6 +175,7 @@ def format_analysis_extraction(analysis, trajectory):
             )
 
     if analysis.failure_chains:
+        logger.info("Including failure chains")
         sections.append("\n## Failure Analysis (Root Cause Chains)")
         for f in analysis.failure_chains:
             sections.append(
@@ -182,6 +187,7 @@ def format_analysis_extraction(analysis, trajectory):
                 )
 
     if analysis.efficiency_issues:
+        logger.info("Including efficiency issues")
         sections.append("\n## Efficiency Issues")
         for e in analysis.efficiency_issues:
             steps_list = e.steps if e.steps else []
@@ -191,6 +197,7 @@ def format_analysis_extraction(analysis, trajectory):
             )
 
     if analysis.subtask_phases:
+        logger.info("Including subtask phases")
         sections.append("\n## Subtask Phases (for cross-task transfer)")
         for p in analysis.subtask_phases:
             sections.append(f"- {p.phase} ({p.outcome}): {p.transferable_pattern}")

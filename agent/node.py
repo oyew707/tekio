@@ -174,7 +174,7 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
     # Add and Truncate messages
     markov_filter = trim_messages(
         strategy="last",
-        max_tokens=10,  # Keeps the last 10 messages
+        max_tokens=7,  # Keeps the last 10 messages
         token_counter=len,  # token counter is messages
         start_on="human",
         include_system=True,
@@ -224,10 +224,15 @@ async def agent_node(state: AgentState, tools: List, playright_tools: List):
             "messages": new_messages + [response],
             "trace_id": trace_id,
             "iterations": 1,
+            "belief": belief_data,
         }
 
     logger.info("agent_node finished successfully")
-    return {"messages": new_messages + [response], "iterations": 1}
+    return {
+        "messages": new_messages + [response],
+        "iterations": 1,
+        "belief": belief_data,
+    }
 
 
 def router_node(state: AgentState):

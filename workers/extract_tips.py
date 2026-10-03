@@ -12,7 +12,7 @@ Email:   eo2233@nyu.edu
 import os
 from dotenv import load_dotenv
 from utils.utils import createOpenAIClient, runPrompt
-from prompts import Tip, TipList, TIP_EXTRACTION_PROMPT
+from .prompts import TipList, TIP_EXTRACTION_PROMPT
 from utils.logger import get_logger
 
 # Constants
