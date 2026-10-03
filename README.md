@@ -8,7 +8,7 @@
      <br /><br />
      <a href="https://github.com/oyew707/tekio"><strong style="color: #4CAF50;">Explore the codebase »</strong></a>
      <br /><br />
-     <a href="https://github.com/oyew707/tekio">View Live Demo</a>
+     <a href="#demo">View Live Demo</a>
      &middot;     <a href="https://github.com/oyew707/tekio/issues/new?labels=bug&template=bug-report---.md">Report Bug</a>
      &middot;     <a href="https://github.com/oyew707/tekio/issues/new?labels=enhancement&template=feature-request---.md">Request Feature</a>
    </p>
@@ -31,17 +31,14 @@
       </ul>
     </li>
     <li><a href="#usage">Usage Flow</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
+    <li><a href="#demo">Demo</a></li>
     <li><a href="#contact">Contact</a></li>
   </ol>
 </details>
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
-[![Tekio Live Demo](https://img.shields.io/badge/Tekio-Live%20Demo-blue?style=flat-square)](YOUR_DEMO_LINK)
-[![Status](https://img.shields.io/badge/Status-Active-brightgreen)](YOUR_STATUS_LINK)
+[![Tekio Live Demo](https://img.shields.io/badge/Tekio-Live%20Demo-blue?style=flat-square)](#demo)
 
 Tekio is an advanced, asynchronous AI agent framework designed to execute complex, multi-step reasoning tasks by operating within a simulated browser environment. It employs advanced planning, execution, and reflection loops to achieve high-fidelity task completion.
 
@@ -109,6 +106,10 @@ To run Tekio, you must have access to the following services and credentials:
 2.  **Queuing:** When a task requires deep processing, the Frontend publishes a task object to the message queue.
 3.  **Execution:** The `queue_consumer` picks up the task and passes it to the appropriate agent/worker chain.
 4.  **Completion:** The result is published back through the queue, eventually being picked up by the Frontend for display.
+
+## Demo
+<video src="https://github.com/user-attachments/assets/49804e53-1cd7-4726-8776-8ace8465ff50" controls="controls" style="max-width: 100%;">
+</video>
 
 
 <!-- CONTACT -->
