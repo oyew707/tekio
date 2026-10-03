@@ -45,6 +45,7 @@ services:
     environment:
       - PLAYWRIGHT_MCP_ALLOWED_HOSTS=playwright-mcp,localhost,*
       - PLAYWRIGHT_MCP_ALLOWED_ORIGINS=*
+      - PLAYWRIGHT_MCP_PING_TIMEOUT_MS=30000
     entrypoint: ["node", "/app/cli.js"]
     volumes:
       - ./playwright-output:/output
@@ -74,7 +75,7 @@ services:
       - "8501:8501"
 
   queue_consumer:
-    build: .
+    image: python:3.11-slim
     volumes:
       - ./:/workspace
     depends_on:

@@ -11,6 +11,7 @@ Email:   eo2233@nyu.edu
 from dotenv import load_dotenv
 import os
 import threading
+from mcp.shared.exceptions import MCPError
 import streamlit as st
 from streamlit.runtime.scriptrunner_utils.script_run_context import add_script_run_ctx
 import asyncio
@@ -60,9 +61,12 @@ CONFIG = {
     "mcpServers": {
         "playwright": {
             "url": "http://playwright-mcp:8931/mcp",
+            "sse_read_timeout": 1800.0,
+            "timeout": 30.0,
         }
     }
 }
+MAX_RETRIES = 3
 
 
 def setup_state():
@@ -167,14 +171,27 @@ def main():
     """
 
     async def run(agent_state):
-        async with MCPAdapter(CONFIG) as adapter:
-            # Agent
-            logger.info("Building agent graph")
-            agent = await build_graph(adapter=adapter)
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                async with MCPAdapter(CONFIG) as adapter:
+                    # Agent
+                    logger.info("Building agent graph")
+                    agent = await build_graph(adapter=adapter)
 
-            logger.debug(f"Running agent stream with model: {st.session_state.model}")
-            final_state = await agent.ainvoke(agent_state)
-        return final_state
+                    logger.debug(
+                        f"Running agent stream with model: {st.session_state.model}"
+                    )
+                    final_state = await agent.ainvoke(agent_state)
+                return final_state
+            except MCPError as e:
+                if e.code == -32600 or "Session terminated" in str(e):
+                    logger.error(
+                        f"MCP Session expired or terminated (Attempt {attempt}/{MAX_RETRIES}). Reinitializing client..."
+                    )
+                    await asyncio.sleep(2)
+                    continue
+                raise e
+        raise RuntimeError("MCP Session could not be stabilized after max retries.")
 
     # App
     st.set_page_config(layout="wide", page_title="tekio browser-use", page_icon="☸")

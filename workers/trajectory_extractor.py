@@ -24,7 +24,8 @@ logger = get_logger(__name__, "info")
 router = Router(
     checkpoints={
         "en": os.path.join(os.getcwd(), "models/laya"),
-    }
+    },
+    preload=True,
 )
 thought_classification_questions = {
     "thought_type": {

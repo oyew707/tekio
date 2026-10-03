@@ -99,7 +99,8 @@ def build_screen_message(
 
     # Extract text and image from the response list
     img_item = next(
-        item for item in playwright_screencapture_resp if item.get("type") == "image"
+        (item for item in playwright_screencapture_resp if item.get("type") == "image"),
+        {},
     )
     base64_str = img_item.get("base64", "")
     mime_type = img_item.get("mime_type", "image/png")
@@ -107,15 +108,12 @@ def build_screen_message(
         image_bytes = base64.b64decode(base64_str)
         image_obj = Image.open(BytesIO(image_bytes))
 
-    if not image_obj:
-        raise ValueError("No image found in playwright_screencapture_resp")
-
     # width, height = get_screenshot_dimensions(image_obj)
 
     parts = [
         "### Browser State",
         f"Page Title: {browser_state.title}",
-        f"Current URL: {browser_state.url.split('?')[0][:100]}",
+        f"Current URL: {browser_state.url.split('?')[0][:100] if browser_state.url is not None and isinstance(browser_state.url, str) else browser_state.url} ",
         # f"Screenshot resolution: {width}x{height}",
     ]
     if browser_state.active_element:
