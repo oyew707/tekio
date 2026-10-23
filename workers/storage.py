@@ -9,7 +9,7 @@ Email:   eo2233@nyu.edu
 
 # Imports
 import json
-from typing import Any, List
+from typing import Any
 from utils.logger import get_logger
 import pandas as pd
 from utils.utils import createOpenAIClient, runPrompt

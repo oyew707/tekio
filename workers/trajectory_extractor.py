@@ -22,7 +22,7 @@ from utils.utils import createOpenAIClient, runPrompt
 # Constants
 project = os.getenv("LANGCHAIN_PROJECT")
 load_dotenv()
-logger = get_logger(__name__, "debug")
+logger = get_logger(__name__, "info")
 router = laya.load(os.path.join(os.getcwd(), "models/laya"))
 thought_classification_questions = {
     "thought_type": {

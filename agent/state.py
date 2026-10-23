@@ -1,6 +1,6 @@
 """
 -------------------------------------------------------
-Defines the State for the Resume Agent
+Defines the State for the Browser Use Agent
 -------------------------------------------------------
 Author:  Einstein Oyewole
 Email:   eo2233@nyu.edu
@@ -8,7 +8,7 @@ Email:   eo2233@nyu.edu
 """
 
 # Imports
-from typing import Dict, Annotated, Optional, List
+from typing import Dict, Annotated, Optional
 from langgraph.graph import MessagesState
 import operator
 from pydantic import BaseModel, Field

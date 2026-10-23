@@ -1,6 +1,6 @@
 """
 -------------------------------------------------------
-[Program Description]
+Utility Modules
 -------------------------------------------------------
 Author:  Einstein O
 Email:   eo2233@nyu.edu

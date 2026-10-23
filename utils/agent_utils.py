@@ -8,7 +8,6 @@ Email:   eo2233@nyu.edu
 """
 
 # Imports
-import asyncio
 import re
 import base64
 from io import BytesIO
@@ -20,7 +19,7 @@ from .logger import get_logger
 from dataclasses import dataclass
 
 # Constants
-logger = get_logger(__name__, "debug")
+logger = get_logger(__name__, "info")
 
 
 @dataclass

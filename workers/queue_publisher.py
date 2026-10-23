@@ -15,9 +15,11 @@ import os
 from typing import Any
 import pika
 from dotenv import load_dotenv
+from utils.logger import get_logger
 
 # Constants
-
+load_dotenv()
+logger = get_logger(__name__, "info")
 
 class TrajectoryQueuePublisher:
     """
@@ -40,6 +42,7 @@ class TrajectoryQueuePublisher:
         """
         self.url = url or os.environ.get("RABBITMQ_URL")
         if not self.url:
+            logger.error("Url for queue is required")
             raise ValueError("RABBITMQ_URL environment variable must be set.")
         self.queue_name = queue_name
 
@@ -77,5 +80,8 @@ class TrajectoryQueuePublisher:
                 body=json.dumps(payload).encode("utf-8"),
                 properties=pika.BasicProperties(delivery_mode=2),
             )
+            logger.info("Successfully published message into queue")
+        except Exception as e:
+            logger.error("Encountered an error", exc_info=e)
         finally:
             connection.close()

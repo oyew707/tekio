@@ -16,7 +16,7 @@ from langchain_openai import OpenAIEmbeddings
 from utils.logger import get_logger
 
 # Constants
-logger = get_logger(__name__, "debug")
+logger = get_logger(__name__, "info")
 
 
 class TipStore:
